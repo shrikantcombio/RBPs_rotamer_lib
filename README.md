@@ -25,12 +25,12 @@
 
 | File Name                          | Description                                                                 |
 |------------------------------------|-----------------------------------------------------------------------------|
-| `RBPs_I_bbd_B_rotamer_lib.csv`     | Interface (I) bound (B) residues - Backbone dependent                      |
-| `RBPs_I_bbd_U_rotamer_lib.csv`     | Interface (I) unbound (U) residues - Backbone dependent                    |
-| `RBPs_N_bbd_B_rotamer_lib.csv`     | Non-interface (N) bound (B) residues - Backbone dependent                  |
-| `RBPs_N_bbd_U_rotamer_lib.csv`     | Non-interface (N) unbound (U) residues - Backbone dependent                |
-| `RBPs_bbd_B_rotamer_lib.csv`       | Overall bound (B) residues - Backbone dependent                            |
-| `RBPs_bbd_U_rotamer_lib.csv`       | Overall unbound (U) residues - Backbone dependent                          |
+| `RBPs_I_bbd_B_rotamer_lib.csv`     | Rotamers at the RNA-binding interface (I) in bound (B) conformation         |
+| `RBPs_I_bbd_U_rotamer_lib.csv`     | Rotamers at the RNA-binding interface (I) in unbound (U) conformation      |
+| `RBPs_N_bbd_B_rotamer_lib.csv`     | Rotamers at the non RNA-binding site (N) in bound (B) conformation         |
+| `RBPs_N_bbd_U_rotamer_lib.csv`     | Rotamers at the non RNA-binding site (N) in unbound (U) conformation       |
+| `RBPs_bbd_B_rotamer_lib.csv`       | Overall in bound (B) conformation                                          |
+| `RBPs_bbd_U_rotamer_lib.csv`       | Overall in unbound (U) conformation                                        |
 
 ### Column Descriptions
 
