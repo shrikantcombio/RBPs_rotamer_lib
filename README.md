@@ -1,7 +1,7 @@
 # RNA Binding Proteins (RBPs) Rotamer Libraries
 
 ## 📁 Directory Structure
-RBPs_rotamer_libraries/
+<pre> RBPs_rotamer_libraries/
 ├── RBPs_BBD_rotamer_lib/
 │   ├── RBPs_I_bbd_B_rotamer_lib.csv
 │   ├── RBPs_I_bbd_U_rotamer_lib.csv
@@ -15,7 +15,7 @@ RBPs_rotamer_libraries/
     ├── RBPs_N_bbi_B_rotamer_lib.csv
     ├── RBPs_N_bbi_U_rotamer_lib.csv
     ├── RBPs_bbi_B_rotamer_lib.csv
-    └── RBPs_bbi_U_rotamer_lib.csv
+    └── RBPs_bbi_U_rotamer_lib.csv </pre>
 
 
 
