@@ -3,13 +3,20 @@
 ## 📁 Directory Structure
 RBPs_rotamer_libraries/
 ├── RBPs_BBD_rotamer_lib/
-│ ├── RBPs_I_bbd_B_rotamer_lib.csv
-│ ├── RBPs_I_bbd_U_rotamer_lib.csv
-│ ├── ... (other BBD files)
+│   ├── RBPs_I_bbd_B_rotamer_lib.csv
+│   ├── RBPs_I_bbd_U_rotamer_lib.csv
+│   ├── RBPs_N_bbd_B_rotamer_lib.csv
+│   ├── RBPs_N_bbd_U_rotamer_lib.csv
+│   ├── RBPs_bbd_B_rotamer_lib.csv
+│   └── RBPs_bbd_U_rotamer_lib.csv
 └── RBPs_BBI_rotamer_lib/
-├── RBPs_I_bbi_B_rotamer_lib.csv
-├── RBPs_I_bbi_U_rotamer_lib.csv
-├── ... (other BBI files)
+    ├── RBPs_I_bbi_B_rotamer_lib.csv
+    ├── RBPs_I_bbi_U_rotamer_lib.csv
+    ├── RBPs_N_bbi_B_rotamer_lib.csv
+    ├── RBPs_N_bbi_U_rotamer_lib.csv
+    ├── RBPs_bbi_B_rotamer_lib.csv
+    └── RBPs_bbi_U_rotamer_lib.csv
+
 
 
 ## 🌀 Backbone Dependent (BBD) Rotamer Library
