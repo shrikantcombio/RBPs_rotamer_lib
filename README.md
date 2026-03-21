@@ -94,3 +94,6 @@
 
 ## 📄 License
 [Please suggest the license type] @Sunandan Da
+
+## If you find this work and use it on your work please cite:
+Sunandan Mukherjee, Shri Kant, and Ranjit P Bahadur. Transition of side-chain conformations of RNA-binding proteins upon bindng RNA (2026).
