@@ -368,14 +368,146 @@ class RBPRotamerDistributionPlotter:
             combined_summary.to_csv(summary_csv_path, index=False)
             logging.info(f"Saved rotamer distribution summary CSV: {summary_csv_path}")
 
+    def plot_chi1_chi2_heatmap(
+        self,
+        tsv_file=None,
+        state="B",
+        save_path=None,
+        figures_dir=FIGURES_DIR,
+    ):
+        """
+        Generate publication-quality Chi1-Chi2 rotamer state heatmap with top percentage bar plot
+        reproducing notebook/chi1_chi2_distribution.png.
+
+        Parameters:
+        -----------
+        tsv_file : Path or str, optional
+            Path to raw torsion angle dataset.
+        state : str
+            'B' for Bound state or 'U' for Unbound state.
+        save_path : Path or str, optional
+        figures_dir : Path or str
+        """
+        import matplotlib.gridspec as gridspec
+
+        tsv_path = Path(tsv_file) if tsv_file else DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+        if not tsv_path.exists():
+            tsv_path = DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+
+        if not tsv_path.exists():
+            logging.error(f"Raw dataset TSV file not found: {tsv_path}")
+            return
+
+        try:
+            df = pd.read_csv(tsv_path, sep=",")
+            if "LABEL" not in df.columns:
+                df = pd.read_csv(tsv_path, sep="\t")
+        except Exception:
+            df = pd.read_csv(tsv_path, sep="\t")
+
+        df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
+
+        aa_chi2 = ["ARG", "ASN", "ASP", "GLU", "GLN", "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "TRP", "TYR"]
+        df_sub = df[df["Amino_acid"].isin(aa_chi2)].copy()
+
+        prefix = f"{state}_"
+        col_chi1 = f"{prefix}CHI1"
+        col_chi2 = f"{prefix}CHI2"
+
+        if col_chi1 not in df_sub.columns or col_chi2 not in df_sub.columns:
+            logging.error(f"Columns {col_chi1} or {col_chi2} not found in dataset.")
+            return
+
+        df_sub["chi1_st"] = df_sub[col_chi1].apply(self.classify_chi_state)
+        df_sub["chi2_st"] = df_sub[col_chi2].apply(self.classify_chi_state)
+        df_sub["chi12"] = df_sub["chi1_st"] + df_sub["chi2_st"]
+
+        df_valid = df_sub.dropna(subset=["chi12"]).copy()
+
+        # Calculate overall state percentages
+        overall_pct = (df_valid["chi12"].value_counts(normalize=True) * 100.0).round(1)
+
+        # Filter states with percentage >= 0.1%
+        sorted_states = overall_pct[overall_pct >= 0.1].index.tolist()
+
+        # Compute Matrix (Amino Acids x Chi1Chi2 States) in percentage
+        matrix_rows = []
+        for aa in aa_chi2:
+            aa_df = df_valid[df_valid["Amino_acid"] == aa]
+            total_aa = len(aa_df)
+            if total_aa > 0:
+                counts = aa_df["chi12"].value_counts().to_dict()
+                row = [(counts.get(st, 0) / total_aa) * 100.0 for st in sorted_states]
+            else:
+                row = [0.0] * len(sorted_states)
+            matrix_rows.append(row)
+
+        matrix = np.array(matrix_rows)
+
+        fig = plt.figure(figsize=(14, 9))
+        gs = gridspec.GridSpec(3, 1, height_ratios=[1.2, 4, 0.4], hspace=0.15)
+
+        ax_bar = fig.add_subplot(gs[0])
+        ax_heat = fig.add_subplot(gs[1])
+        ax_cbar = fig.add_subplot(gs[2])
+
+        # 1. Top Bar Chart
+        bar_vals = [overall_pct[st] for st in sorted_states]
+        bars = ax_bar.bar(range(len(sorted_states)), bar_vals, color="#87ceeb", width=0.8, edgecolor="none")
+
+        for idx, val in enumerate(bar_vals):
+            ax_bar.text(idx, val + 0.8, f"{val:.1f}", ha="center", va="bottom", fontsize=11)
+
+        ax_bar.set_xlim(-0.6, len(sorted_states) - 0.4)
+        ax_bar.set_ylim(0, max(bar_vals) * 1.25)
+        ax_bar.set_ylabel("Percentage (%)", fontsize=14)
+        ax_bar.spines["top"].set_visible(False)
+        ax_bar.spines["right"].set_visible(False)
+        ax_bar.tick_params(axis="x", which="both", bottom=False, labelbottom=False)
+
+        # 2. Bottom Heatmap
+        im = ax_heat.imshow(matrix, cmap="Blues", aspect="auto", vmin=0, vmax=max(55.0, matrix.max()))
+
+        ax_heat.set_xticks(range(len(sorted_states)))
+        ax_heat.set_xticklabels(sorted_states, fontsize=13, rotation=90, ha="center")
+
+        ax_heat.set_yticks(range(len(aa_chi2)))
+        ax_heat.set_yticklabels(aa_chi2, fontsize=13)
+        ax_heat.set_ylabel("Amino acids", fontsize=14, labelpad=10)
+        ax_heat.set_xlabel(r"$\chi_1\chi_2$ states", fontsize=15, labelpad=10)
+
+        # 3. Colorbar at bottom
+        cbar = fig.colorbar(im, cax=ax_cbar, orientation="horizontal")
+        cbar.set_label("Percentage", fontsize=12)
+        cbar.ax.tick_params(labelsize=12)
+
+        # Determine file output path
+        if save_path:
+            out_path = Path(save_path)
+        else:
+            out_path = Path(figures_dir) / "chi1_chi2_distribution.png"
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, dpi=600, bbox_inches="tight")
+        logging.info(f"Saved Chi1-Chi2 heatmap plot: {out_path}")
+
+        alt_path = ALT_FIGURES_DIR / "chi1_chi2_distribution.png"
+        if alt_path.parent != out_path.parent:
+            alt_path.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(alt_path, dpi=300, bbox_inches="tight")
+
+        plt.close(fig)
+
     def plot_all(self, figures_dir=FIGURES_DIR, output_dir=RESULTS_DIR):
         """
-        Generate all rotamer distribution plots and summary tables for Chi1 to Chi5.
+        Generate all rotamer distribution plots and summary tables for Chi1 to Chi5,
+        including the Chi1-Chi2 state heatmap.
         """
         for chi in range(1, 6):
             for sasa in ["int", "nonint"]:
                 self.plot_stacked_distribution(chi_level=chi, sasa_type=sasa, figures_dir=figures_dir)
 
+        self.plot_chi1_chi2_heatmap(figures_dir=figures_dir)
         self.compute_and_export_summary(output_dir=output_dir)
 
 
@@ -391,10 +523,14 @@ def main():
     parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output directory for figure plots.")
     parser.add_argument("--chi-level", type=str, default="all", choices=["1", "2", "3", "4", "5", "all"], help="Chi angle level (1..5 or 'all').")
     parser.add_argument("--sasa", type=str, default="both", choices=["int", "nonint", "both"], help="SASA partition filter ('int', 'nonint', 'both').")
+    parser.add_argument("--plot-heatmap", action="store_true", help="Plot Chi1-Chi2 rotamer state heatmap.")
 
     args = parser.parse_args()
 
     plotter = RBPRotamerDistributionPlotter(excel_file=args.excel_file)
+
+    if args.plot_heatmap:
+        plotter.plot_chi1_chi2_heatmap(figures_dir=args.figures_dir)
 
     if args.chi_level == "all" and args.sasa == "both":
         plotter.plot_all(figures_dir=args.figures_dir, output_dir=args.output_dir)
@@ -413,3 +549,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
