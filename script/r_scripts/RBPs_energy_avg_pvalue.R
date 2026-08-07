@@ -2,15 +2,19 @@
 # ==============================================================================
 # RBPs_energy_avg_pvalue.R
 # ------------------------------------------------------------------------------
-# Refactored R script for publication-quality average energy distributions (Bound vs Unbound).
-# Reads directly from JSON summary files (preserving exact PDB IDs and string formats).
+# Refactored R script matching sample_R_plot aesthetics for Average Torsional Energy.
+# Loads directly from JSON summary files (preserving exact PDB IDs and string formats).
 #
-# Generates:
-#   - Boxplot with independent t-test p-value annotation
-#   - Paired line plot with paired two-tailed t-test p-value annotation
+# Aesthetics & Parameters (matching sample_R_plot):
+#   - Lancet palette: U = #00468B (Dark Blue), B = #ED0000 (Lancet Red)
+#   - Independent & paired t-test p-value annotation top-center
+#   - font("xlab", size = 16), font("ylab", size = 16), font("axis.text", size = 14)
+#   - Line color = "gray", line size = 0.4
+#   - Title REMOVED (plot.title = element_blank())
 #
-# Output filenames dynamically constructed based on region/subset arguments:
-#   e.g., avg_energy_pdb_int_avg_boxplot.png, avg_energy_aa_int_avg_paired.png, etc.
+# Dynamic Filename Formatting:
+#   avg_energy_<subset>_<region>_avg_boxplot.png / avg_paired.png / .tiff
+#   where subset in {pdb, aa, aromatic} and region in {int, nint}
 #
 # Usage:
 #   Rscript script/r_scripts/RBPs_energy_avg_pvalue.R [json_file] [region_mode: INT|NINT|AA_INT|AA_NINT|AROMATIC_INT|AROMATIC_NINT]
@@ -48,10 +52,10 @@ if (is_aa_level) {
   if (grepl("AROMATIC", region_mode, ignore.case = TRUE)) {
     df_raw <- df_raw[df_raw$AA %in% c("HIS", "PHE", "TRP", "TYR"), ]
     subset_tag <- "aromatic"
-    mlab <- "Aromatic Residues"
+    mlab <- "Aromatic Interface"
   } else {
     subset_tag <- "aa"
-    mlab <- "Amino Acid"
+    mlab <- "Amino Acid Interface"
   }
   
   if (grepl("NINT", region_mode, ignore.case = TRUE)) {
@@ -59,13 +63,12 @@ if (is_aa_level) {
     b_vals <- df_raw$NB_AVG_DELG
     res_ids <- df_raw$AA
     region_tag <- "nint"
-    mlab <- paste(mlab, "Non-interface")
+    mlab <- gsub("Interface", "Non-interface", mlab)
   } else {
     u_vals <- df_raw$IU_AVG_DELG
     b_vals <- df_raw$IB_AVG_DELG
     res_ids <- df_raw$AA
     region_tag <- "int"
-    mlab <- paste(mlab, "Interface")
   }
 } else {
   subset_tag <- "pdb"
@@ -74,12 +77,12 @@ if (is_aa_level) {
     u_vals <- df_raw$NU_AVG_DELG
     b_vals <- df_raw$NB_AVG_DELG
     region_tag <- "nint"
-    mlab <- "PDB Non-interface"
+    mlab <- "Non-interface"
   } else {
     u_vals <- df_raw$IU_AVG_DELG
     b_vals <- df_raw$IB_AVG_DELG
     region_tag <- "int"
-    mlab <- "PDB Interface"
+    mlab <- "Interface"
   }
 }
 
@@ -95,60 +98,62 @@ mydata <- mydata[!is.na(mydata$Avg.E), ]
 b_vec <- mydata$Avg.E[mydata$Form == "B"]
 u_vec <- mydata$Avg.E[mydata$Form == "U"]
 
-# Compute two-tailed t-tests
+# Compute two-tailed independent and paired t-tests
 tt_ind <- t.test(b_vec, u_vec, paired = FALSE)
 tt_pair <- t.test(b_vec, u_vec, paired = TRUE)
 
-pval_ind_str <- paste0("t-test, p = ", format.pval(tt_ind$p.value, digits = 3))
-pval_pair_str <- paste0("paired t-test, p = ", format.pval(tt_pair$p.value, digits = 3))
+pval_ind_str <- paste0("p = ", format.pval(tt_ind$p.value, digits = 3))
+pval_pair_str <- paste0("p = ", format.pval(tt_pair$p.value, digits = 3))
 
 max_y <- max(mydata$Avg.E, na.rm = TRUE)
 min_y <- min(mydata$Avg.E, na.rm = TRUE)
 y_top <- max_y + (max_y - min_y) * 0.12
 
-# Construct output filename stem: avg_energy_<subset>_<region>
+# Dynamic publication filename stem
 filename_base <- paste0("avg_energy_", subset_tag, "_", region_tag)
 
-# Color scheme matching sample publication plots
-state_colors <- c("B" = "#004225", "U" = "#B22222")
+# Lancet palette colors (Dark Blue for U, Lancet Red for B)
+lancet_colors <- c("U" = "#00468B", "B" = "#ED0000")
 
-# 1. Boxplot with independent t-test p-value (No title)
-p_box <- ggplot(mydata, aes(x = Form, y = Avg.E, fill = Form, color = Form)) +
-  geom_boxplot(alpha = 0.6, outlier.shape = NA, width = 0.4, linewidth = 0.6) +
-  geom_jitter(width = 0.18, alpha = 0.7, size = 2) +
-  annotate("text", x = 1.5, y = y_top, label = pval_ind_str, size = 4.8, fontface = "bold") +
-  scale_fill_manual(values = state_colors) +
-  scale_color_manual(values = state_colors) +
-  scale_x_discrete(labels = c("U" = "Unbound (U)", "B" = "Bound (B)")) +
-  labs(x = mlab, y = "Average Torsional Energy (kcal/mol)") +
+# 1. Boxplot (matching sample_R_plot ggboxplot + Lancet palette + jitter)
+p_box <- ggplot(mydata, aes(x = Form, y = Avg.E, color = Form, fill = Form)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA, width = 0.45, linewidth = 0.6) +
+  geom_jitter(width = 0.2, alpha = 0.7, size = 1.8) +
+  annotate("text", x = 1.5, y = y_top, label = pval_ind_str, size = 5, fontface = "bold") +
+  scale_color_manual(values = lancet_colors) +
+  scale_fill_manual(values = lancet_colors) +
+  scale_x_discrete(labels = c("U" = "U", "B" = "B")) +
+  labs(x = mlab, y = "E (Kcal/mol)") +
   theme_bw(base_size = 14) +
   theme(
     plot.title = element_blank(),
-    axis.title = element_text(size = 14, face = "bold"),
-    axis.text = element_text(size = 12, face = "bold", color = "black"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14, face = "bold", color = "black"),
     legend.position = "none"
   )
 
-ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 5.5, height = 5.5, dpi = 600)
-ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 5.5, height = 5.5, dpi = 600)
+ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 4.5, height = 4.5, dpi = 600)
+ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 4.5, height = 4.5, dpi = 600)
 
-# 2. Paired Line Plot with paired t-test p-value (No title)
+# 2. Paired Plot (matching sample_R_plot ggpaired + line.color="gray", line.size=0.4 + jitter)
 p_paired <- ggplot(mydata, aes(x = Form, y = Avg.E, group = Res, color = Form)) +
-  geom_line(color = "gray50", alpha = 0.6, linewidth = 0.5) +
+  geom_line(color = "gray", linewidth = 0.4, alpha = 0.7) +
   geom_point(size = 2.2, alpha = 0.85) +
-  annotate("text", x = 1.5, y = y_top, label = pval_pair_str, size = 4.8, fontface = "bold") +
-  scale_color_manual(values = state_colors) +
-  scale_x_discrete(labels = c("U" = "Unbound (U)", "B" = "Bound (B)")) +
-  labs(x = mlab, y = "Average Torsional Energy (kcal/mol)") +
+  annotate("text", x = 1.5, y = y_top, label = pval_pair_str, size = 5, fontface = "bold") +
+  scale_color_manual(values = lancet_colors) +
+  scale_x_discrete(labels = c("U" = "U", "B" = "B")) +
+  labs(x = mlab, y = "E (Kcal/mol)") +
   theme_bw(base_size = 14) +
   theme(
     plot.title = element_blank(),
-    axis.title = element_text(size = 14, face = "bold"),
-    axis.text = element_text(size = 12, face = "bold", color = "black"),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 14, face = "bold", color = "black"),
     legend.position = "none"
   )
 
-ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 5.5, height = 5.5, dpi = 600)
-ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 5.5, height = 5.5, dpi = 600)
+ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600)
+ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600)
 
-cat("Successfully generated publication-quality average energy plots (No title, dynamic filename):", filename_base, "\n")
+cat("Successfully generated publication-quality average energy plots (Lancet palette, No title, dynamic filename):", filename_base, "\n")
