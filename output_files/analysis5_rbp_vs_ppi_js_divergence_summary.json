@@ -1,0 +1,146 @@
+[
+  {
+    "AA": "ARG",
+    "RBP_Interface_Residues": 868,
+    "PPI_Interface_Residues": 921,
+    "JS_Divergence_Bits": 1.0,
+    "Chi2_Stat": 1789.0,
+    "p_value": 0.0
+  },
+  {
+    "AA": "LYS",
+    "RBP_Interface_Residues": 743,
+    "PPI_Interface_Residues": 1271,
+    "JS_Divergence_Bits": 1.0,
+    "Chi2_Stat": 2014.0,
+    "p_value": 0.0
+  },
+  {
+    "AA": "GLN",
+    "RBP_Interface_Residues": 302,
+    "PPI_Interface_Residues": 1023,
+    "JS_Divergence_Bits": 0.5016,
+    "Chi2_Stat": 691.767,
+    "p_value": 3.6655540536538363e-146
+  },
+  {
+    "AA": "MET",
+    "RBP_Interface_Residues": 140,
+    "PPI_Interface_Residues": 400,
+    "JS_Divergence_Bits": 0.454,
+    "Chi2_Stat": 262.854,
+    "p_value": 1.084830895165503e-56
+  },
+  {
+    "AA": "GLU",
+    "RBP_Interface_Residues": 354,
+    "PPI_Interface_Residues": 1286,
+    "JS_Divergence_Bits": 0.4324,
+    "Chi2_Stat": 772.713,
+    "p_value": 1.5860947092212955e-160
+  },
+  {
+    "AA": "ILE",
+    "RBP_Interface_Residues": 301,
+    "PPI_Interface_Residues": 1103,
+    "JS_Divergence_Bits": 0.36,
+    "Chi2_Stat": 520.885,
+    "p_value": 1.420090639137165e-112
+  },
+  {
+    "AA": "LEU",
+    "RBP_Interface_Residues": 375,
+    "PPI_Interface_Residues": 1950,
+    "JS_Divergence_Bits": 0.2744,
+    "Chi2_Stat": 648.67,
+    "p_value": 4.522940376864249e-139
+  },
+  {
+    "AA": "TYR",
+    "RBP_Interface_Residues": 331,
+    "PPI_Interface_Residues": 927,
+    "JS_Divergence_Bits": 0.2388,
+    "Chi2_Stat": 307.718,
+    "p_value": 1.5131752010065926e-67
+  },
+  {
+    "AA": "PHE",
+    "RBP_Interface_Residues": 292,
+    "PPI_Interface_Residues": 895,
+    "JS_Divergence_Bits": 0.1941,
+    "Chi2_Stat": 239.017,
+    "p_value": 1.5523306718798956e-51
+  },
+  {
+    "AA": "ASN",
+    "RBP_Interface_Residues": 393,
+    "PPI_Interface_Residues": 963,
+    "JS_Divergence_Bits": 0.1905,
+    "Chi2_Stat": 289.136,
+    "p_value": 2.233425435873363e-62
+  },
+  {
+    "AA": "HIS",
+    "RBP_Interface_Residues": 249,
+    "PPI_Interface_Residues": 453,
+    "JS_Divergence_Bits": 0.154,
+    "Chi2_Stat": 134.531,
+    "p_value": 5.709135908895105e-29
+  },
+  {
+    "AA": "TRP",
+    "RBP_Interface_Residues": 68,
+    "PPI_Interface_Residues": 411,
+    "JS_Divergence_Bits": 0.136,
+    "Chi2_Stat": 51.418,
+    "p_value": 6.8347655871789835e-12
+  },
+  {
+    "AA": "ASP",
+    "RBP_Interface_Residues": 357,
+    "PPI_Interface_Residues": 1168,
+    "JS_Divergence_Bits": 0.1325,
+    "Chi2_Stat": 219.742,
+    "p_value": 2.283098969163992e-47
+  },
+  {
+    "AA": "PRO",
+    "RBP_Interface_Residues": 309,
+    "PPI_Interface_Residues": 1136,
+    "JS_Divergence_Bits": 0.1218,
+    "Chi2_Stat": 266.39,
+    "p_value": 1.42589694645389e-58
+  },
+  {
+    "AA": "SER",
+    "RBP_Interface_Residues": 489,
+    "PPI_Interface_Residues": 2061,
+    "JS_Divergence_Bits": 0.0223,
+    "Chi2_Stat": 48.295,
+    "p_value": 3.257344740493367e-11
+  },
+  {
+    "AA": "VAL",
+    "RBP_Interface_Residues": 297,
+    "PPI_Interface_Residues": 1705,
+    "JS_Divergence_Bits": 0.0078,
+    "Chi2_Stat": 11.91,
+    "p_value": 0.002592898056714207
+  },
+  {
+    "AA": "CYS",
+    "RBP_Interface_Residues": 78,
+    "PPI_Interface_Residues": 442,
+    "JS_Divergence_Bits": 0.0042,
+    "Chi2_Stat": 1.629,
+    "p_value": 0.4428019190632322
+  },
+  {
+    "AA": "THR",
+    "RBP_Interface_Residues": 390,
+    "PPI_Interface_Residues": 1624,
+    "JS_Divergence_Bits": 0.0004,
+    "Chi2_Stat": 0.698,
+    "p_value": 0.7054790498857144
+  }
+]
