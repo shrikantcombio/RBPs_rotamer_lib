@@ -1,0 +1,164 @@
+[
+  {
+    "AA": "GLN",
+    "Interface_Total": 302,
+    "Interface_CS_Percent": 48.01,
+    "Interface_IF_Percent": 5.3,
+    "NonInterface_Total": 2231,
+    "NonInterface_CS_Percent": 30.75,
+    "NonInterface_IF_Percent": 8.56
+  },
+  {
+    "AA": "MET",
+    "Interface_Total": 140,
+    "Interface_CS_Percent": 42.14,
+    "Interface_IF_Percent": 1.43,
+    "NonInterface_Total": 1241,
+    "NonInterface_CS_Percent": 20.06,
+    "NonInterface_IF_Percent": 8.22
+  },
+  {
+    "AA": "GLU",
+    "Interface_Total": 354,
+    "Interface_CS_Percent": 38.42,
+    "Interface_IF_Percent": 18.08,
+    "NonInterface_Total": 4826,
+    "NonInterface_CS_Percent": 25.47,
+    "NonInterface_IF_Percent": 19.52
+  },
+  {
+    "AA": "LYS",
+    "Interface_Total": 743,
+    "Interface_CS_Percent": 35.94,
+    "Interface_IF_Percent": 29.74,
+    "NonInterface_Total": 4292,
+    "NonInterface_CS_Percent": 26.03,
+    "NonInterface_IF_Percent": 30.78
+  },
+  {
+    "AA": "SER",
+    "Interface_Total": 489,
+    "Interface_CS_Percent": 35.17,
+    "Interface_IF_Percent": 0.0,
+    "NonInterface_Total": 3315,
+    "NonInterface_CS_Percent": 28.69,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "TRP",
+    "Interface_Total": 68,
+    "Interface_CS_Percent": 33.82,
+    "Interface_IF_Percent": 0.0,
+    "NonInterface_Total": 728,
+    "NonInterface_CS_Percent": 6.32,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "ARG",
+    "Interface_Total": 868,
+    "Interface_CS_Percent": 31.11,
+    "Interface_IF_Percent": 38.82,
+    "NonInterface_Total": 3420,
+    "NonInterface_CS_Percent": 20.47,
+    "NonInterface_IF_Percent": 31.87
+  },
+  {
+    "AA": "ASP",
+    "Interface_Total": 357,
+    "Interface_CS_Percent": 24.65,
+    "Interface_IF_Percent": 1.12,
+    "NonInterface_Total": 3603,
+    "NonInterface_CS_Percent": 16.51,
+    "NonInterface_IF_Percent": 0.69
+  },
+  {
+    "AA": "ASN",
+    "Interface_Total": 393,
+    "Interface_CS_Percent": 23.66,
+    "Interface_IF_Percent": 4.07,
+    "NonInterface_Total": 2557,
+    "NonInterface_CS_Percent": 18.69,
+    "NonInterface_IF_Percent": 0.74
+  },
+  {
+    "AA": "LEU",
+    "Interface_Total": 375,
+    "Interface_CS_Percent": 19.73,
+    "Interface_IF_Percent": 2.93,
+    "NonInterface_Total": 5829,
+    "NonInterface_CS_Percent": 11.07,
+    "NonInterface_IF_Percent": 6.16
+  },
+  {
+    "AA": "CYS",
+    "Interface_Total": 78,
+    "Interface_CS_Percent": 19.23,
+    "Interface_IF_Percent": 0.0,
+    "NonInterface_Total": 749,
+    "NonInterface_CS_Percent": 15.09,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "PHE",
+    "Interface_Total": 292,
+    "Interface_CS_Percent": 17.81,
+    "Interface_IF_Percent": 1.03,
+    "NonInterface_Total": 2505,
+    "NonInterface_CS_Percent": 6.35,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "VAL",
+    "Interface_Total": 297,
+    "Interface_CS_Percent": 17.51,
+    "Interface_IF_Percent": 6.06,
+    "NonInterface_Total": 3833,
+    "NonInterface_CS_Percent": 14.66,
+    "NonInterface_IF_Percent": 5.3
+  },
+  {
+    "AA": "HIS",
+    "Interface_Total": 249,
+    "Interface_CS_Percent": 16.87,
+    "Interface_IF_Percent": 0.8,
+    "NonInterface_Total": 1383,
+    "NonInterface_CS_Percent": 11.42,
+    "NonInterface_IF_Percent": 0.29
+  },
+  {
+    "AA": "THR",
+    "Interface_Total": 390,
+    "Interface_CS_Percent": 16.15,
+    "Interface_IF_Percent": 3.08,
+    "NonInterface_Total": 2965,
+    "NonInterface_CS_Percent": 16.86,
+    "NonInterface_IF_Percent": 4.05
+  },
+  {
+    "AA": "ILE",
+    "Interface_Total": 301,
+    "Interface_CS_Percent": 12.96,
+    "Interface_IF_Percent": 5.65,
+    "NonInterface_Total": 3534,
+    "NonInterface_CS_Percent": 10.07,
+    "NonInterface_IF_Percent": 2.49
+  },
+  {
+    "AA": "PRO",
+    "Interface_Total": 309,
+    "Interface_CS_Percent": 8.74,
+    "Interface_IF_Percent": 14.89,
+    "NonInterface_Total": 2876,
+    "NonInterface_CS_Percent": 6.15,
+    "NonInterface_IF_Percent": 11.47
+  },
+  {
+    "AA": "TYR",
+    "Interface_Total": 331,
+    "Interface_CS_Percent": 8.46,
+    "Interface_IF_Percent": 3.93,
+    "NonInterface_Total": 2220,
+    "NonInterface_CS_Percent": 4.28,
+    "NonInterface_IF_Percent": 1.44
+  }
+]

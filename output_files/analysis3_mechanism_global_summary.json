@@ -1,0 +1,14 @@
+{
+  "Interface_Total": 6336,
+  "Interface_Rigid_Percent": 61.7,
+  "Interface_Conformational_Selection_Percent": 25.96,
+  "Interface_Induced_Fit_Percent": 12.34,
+  "NonInterface_Total": 52107,
+  "NonInterface_Rigid_Percent": 73.82,
+  "NonInterface_Conformational_Selection_Percent": 16.92,
+  "NonInterface_Induced_Fit_Percent": 9.26,
+  "Transitioning_Interface_CS_Ratio": 67.78,
+  "Transitioning_Interface_IF_Ratio": 32.22,
+  "Fisher_Odds_Ratio": 1.1515,
+  "Fisher_p_value": 0.002658549515090922
+}

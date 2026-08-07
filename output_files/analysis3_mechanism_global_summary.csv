@@ -1,0 +1,2 @@
+Interface_Total,Interface_Rigid_Percent,Interface_Conformational_Selection_Percent,Interface_Induced_Fit_Percent,NonInterface_Total,NonInterface_Rigid_Percent,NonInterface_Conformational_Selection_Percent,NonInterface_Induced_Fit_Percent,Transitioning_Interface_CS_Ratio,Transitioning_Interface_IF_Ratio,Fisher_Odds_Ratio,Fisher_p_value
+6336,61.7,25.96,12.34,52107,73.82,16.92,9.26,67.78,32.22,1.1515,0.002658549515090922

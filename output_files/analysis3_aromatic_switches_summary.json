@@ -1,0 +1,38 @@
+[
+  {
+    "AA": "TRP",
+    "Interface_Total": 68,
+    "Interface_CS_Percent": 33.82,
+    "Interface_IF_Percent": 0.0,
+    "NonInterface_Total": 728,
+    "NonInterface_CS_Percent": 6.32,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "PHE",
+    "Interface_Total": 292,
+    "Interface_CS_Percent": 17.81,
+    "Interface_IF_Percent": 1.03,
+    "NonInterface_Total": 2505,
+    "NonInterface_CS_Percent": 6.35,
+    "NonInterface_IF_Percent": 0.0
+  },
+  {
+    "AA": "HIS",
+    "Interface_Total": 249,
+    "Interface_CS_Percent": 16.87,
+    "Interface_IF_Percent": 0.8,
+    "NonInterface_Total": 1383,
+    "NonInterface_CS_Percent": 11.42,
+    "NonInterface_IF_Percent": 0.29
+  },
+  {
+    "AA": "TYR",
+    "Interface_Total": 331,
+    "Interface_CS_Percent": 8.46,
+    "Interface_IF_Percent": 3.93,
+    "NonInterface_Total": 2220,
+    "NonInterface_CS_Percent": 4.28,
+    "NonInterface_IF_Percent": 1.44
+  }
+]
