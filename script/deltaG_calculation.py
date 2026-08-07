@@ -7,7 +7,7 @@ for bound and unbound protein structures using standardized AMBER force-field pa
 
 Generates:
 1. PDB-level total and average energy JSON and CSV files across 187 structures at Interface (I) and Non-Interface (N).
-2. Amino Acid-level total and average energy JSON and CSV files across 17 amino acid types.
+2. Amino Acid-level total and average energy JSON and CSV files across 18 amino acid types (including Proline).
 
 Usage:
     python script/deltaG_calculation.py [options]
@@ -38,7 +38,7 @@ RT = 0.59225621
 # Amino acid groups
 AA_ONLY_CHI1 = ["CYS", "SER", "THR", "VAL"]
 AA_AROMATIC = ["HIS", "PHE", "TRP", "TYR"]
-EXCLUDED_RESIDUES = ["GLY", "ALA", "PRO"]
+EXCLUDED_RESIDUES = ["GLY", "ALA"]
 
 # Standardized AMBER force field parameters (parm14SB / ff99SB)
 # Format: {angle_name: [barrier_divider, K_theta (kcal/mol), phase_shift (deg), periodicity_m]}
@@ -97,6 +97,10 @@ DIHEDRAL_PARAMS = {
     "PHE": {
         "CHI1": [1, 5.728, 180.0, 3.0],
         "CHI2": [1, 0.126, -21.2, 4.0]
+    },
+    "PRO": {
+        "CHI1": [1, 0.144, 0.0, 3.0],
+        "CHI2": [1, 0.164, 0.0, 3.0]
     },
     "SER": {
         "CHI1": [1, 0.401, 0.0, 3.0]
@@ -157,7 +161,7 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
     e_u_bb = 0.0
     e_b_bb = 0.0
 
-    if include_backbone and res_name not in ["GLY", "PRO"]:
+    if include_backbone and res_name != "GLY":
         u_phi = float(row.get("U_PHI", row.get("B_PHI", 0.0)))
         u_psi = float(row.get("U_PSI", row.get("B_PSI", 0.0)))
         b_phi = float(row.get("B_PHI", 0.0))
@@ -330,9 +334,9 @@ def main():
     with open(aa_json, "w") as f:
         json.dump(df_aa_energy.to_dict(orient="records"), f, indent=2)
 
-    logging.info(f"Saved Amino Acid-level energy summary: {aa_csv} and {aa_json}")
+    logging.info(f"Saved Amino Acid-level energy summary (18 AA types including PRO): {aa_csv} and {aa_json}")
 
-    logging.info("DeltaG torsion energy calculation completed cleanly (JSON/CSV outputs updated, no .dat files created).")
+    logging.info("DeltaG torsion energy calculation completed cleanly (Proline included, 18 AA types).")
 
 
 if __name__ == "__main__":
