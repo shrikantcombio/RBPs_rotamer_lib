@@ -2,17 +2,21 @@
 """
 energy_pvalue_plotter.py
 
-Calculates statistical significance (independent two-sample t-test and paired t-test)
-for side-chain energy distributions (Bound vs Unbound states) across Interface and Non-Interface
-regions, and generates publication-quality boxplots and paired line plots.
+Master statistical calculator and visualizer for side-chain energy distributions (Bound vs Unbound states).
+Reads directly from JSON summary files to avoid CSV string/number conversion artifacts (e.g. '4E78').
 
-Saves figures under figure/energy_pvalues/ and figures/energy_pvalues/.
+Generates:
+1. PDB-level total and average energy boxplots and paired line plots.
+2. Amino Acid-wise paired two-tailed t-test energy comparison plots at Interface (I) and Non-Interface (N).
+3. Dedicated energy comparison plots for Aromatic Amino Acids (HIS, PHE, TRP, TYR).
+
+Saves 600 DPI publication plots under figure/energy_pvalues/ and figures/energy_pvalues/.
 
 Usage:
-    python script/energy_pvalue_plotter.py [options]
+    python script/energy_pvalue_plotter.py
 """
 
-import argparse
+import json
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -32,8 +36,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
-RESULTS_DIR = ROOT_DIR / "output_files" / "energy_pvalues"
+OUTPUT_DIR = ROOT_DIR / "output_files"
+RESULTS_DIR = OUTPUT_DIR / "energy_pvalues"
 FIGURES_DIR = ROOT_DIR / "figure" / "energy_pvalues"
 ALT_FIGURES_DIR = ROOT_DIR / "figures" / "energy_pvalues"
 
@@ -45,173 +49,172 @@ ALT_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 plt.style.use("tableau-colorblind10")
 plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica"]
+plt.rcParams["axes.edgecolor"] = "#333333"
+plt.rcParams["axes.linewidth"] = 1.0
 
 
 class EnergyPValuePlotter:
-    """
-    Statistical calculator and visualizer for side-chain energy distributions.
-    """
-
-    def __init__(self, figures_dir=FIGURES_DIR, alt_figures_dir=ALT_FIGURES_DIR, results_dir=RESULTS_DIR):
+    def __init__(self, output_dir=OUTPUT_DIR, figures_dir=FIGURES_DIR, alt_figures_dir=ALT_FIGURES_DIR):
+        self.output_dir = Path(output_dir)
         self.figures_dir = Path(figures_dir)
         self.alt_figures_dir = Path(alt_figures_dir)
-        self.results_dir = Path(results_dir)
 
-        self.figures_dir.mkdir(parents=True, exist_ok=True)
-        self.alt_figures_dir.mkdir(parents=True, exist_ok=True)
-        self.results_dir.mkdir(parents=True, exist_ok=True)
-
-    def load_data(self, data_path):
-        """Load tab-separated energy data file."""
-        p = Path(data_path)
-        if not p.exists():
-            logging.error(f"Data file not found: {p}")
+    def load_json(self, filename):
+        path = self.output_dir / filename
+        if not path.exists():
+            logging.error(f"JSON summary file not found: {path}")
             return None
-        df = pd.read_csv(p, sep="\t")
-        return df
+        with open(path, "r") as f:
+            data = json.load(f)
+        return pd.DataFrame(data)
 
-    def compute_statistics(self, df):
-        """
-        Compute independent and paired t-test p-values.
-        """
-        if "Form" not in df.columns or "Avg.E" not in df.columns:
-            logging.error("DataFrame missing required columns 'Form' or 'Avg.E'.")
-            return None
+    def plot_pdb_energy(self, df_pdb, region="INT", metric="AVG"):
+        """Plot PDB-level energy distributions (Bound vs Unbound) for Interface or Non-interface."""
+        if region == "INT":
+            u_col = "IU_AVG_DELG" if metric == "AVG" else "IU_DELG"
+            b_col = "IB_AVG_DELG" if metric == "AVG" else "IB_DELG"
+        else:
+            u_col = "NU_AVG_DELG" if metric == "AVG" else "NU_DELG"
+            b_col = "NB_AVG_DELG" if metric == "AVG" else "NB_DELG"
+        label = "Interface" if region == "INT" else "Non-interface"
+        metric_str = "Average" if metric == "AVG" else "Total"
 
-        b_vals = df[df["Form"] == "B"]["Avg.E"].values
-        u_vals = df[df["Form"] == "U"]["Avg.E"].values
+        u_vals = df_pdb[u_col].values
+        b_vals = df_pdb[b_col].values
+        res_ids = df_pdb["PDB_ID"].values
 
-        # Independent t-test
+        # Two-tailed t-tests
         ind_stat, ind_p = stats.ttest_ind(b_vals, u_vals, equal_var=False)
+        pair_stat, pair_p = stats.ttest_rel(b_vals, u_vals)
 
-        # Paired t-test (if equal number of paired samples)
-        paired_stat, paired_p = np.nan, np.nan
-        if len(b_vals) == len(u_vals) and len(b_vals) > 0:
-            paired_stat, paired_p = stats.ttest_rel(b_vals, u_vals)
+        # Build DataFrame for plot
+        df_plot = pd.DataFrame({
+            "PDB_ID": np.repeat(res_ids, 2),
+            "Energy": np.concatenate([u_vals, b_vals]),
+            "Form": np.repeat(["U", "B"], len(res_ids))
+        })
 
-        summary = {
-            "N_Bound": len(b_vals),
-            "Mean_Bound": float(np.mean(b_vals)) if len(b_vals) > 0 else np.nan,
-            "Std_Bound": float(np.std(b_vals, ddof=1)) if len(b_vals) > 1 else np.nan,
-            "N_Unbound": len(u_vals),
-            "Mean_Unbound": float(np.mean(u_vals)) if len(u_vals) > 0 else np.nan,
-            "Std_Unbound": float(np.std(u_vals, ddof=1)) if len(u_vals) > 1 else np.nan,
-            "Ind_t_stat": float(ind_stat),
-            "Ind_p_value": float(ind_p),
-            "Paired_t_stat": float(paired_stat),
-            "Paired_p_value": float(paired_p),
-        }
-        return summary
-
-    def plot_boxplot(self, df, label="Interface", filename_stem="energy_distribution"):
-        """
-        Generate boxplot with jitter points and independent t-test p-value annotation.
-        """
-        summary = self.compute_statistics(df)
-        if summary is None:
-            return
-
-        fig, ax = plt.subplots(figsize=(5, 5))
-
+        fig, ax = plt.subplots(figsize=(5.5, 5.5))
         colors = {"B": "#004225", "U": "#B22222"}
 
         if HAS_SEABORN:
-            sns.boxplot(data=df, x="Form", y="Avg.E", hue="Form", palette=colors, ax=ax, width=0.4, boxprops=dict(alpha=0.6), legend=False)
-            sns.stripplot(data=df, x="Form", y="Avg.E", hue="Form", palette=colors, alpha=0.6, jitter=0.2, size=5, ax=ax, legend=False)
-        else:
-            forms = df["Form"].unique()
-            data_by_form = [df[df["Form"] == f]["Avg.E"].values for f in forms]
-            ax.boxplot(data_by_form, labels=forms, patch_artist=True)
+            sns.boxplot(data=df_plot, x="Form", y="Energy", hue="Form", palette=colors, ax=ax, width=0.4, boxprops=dict(alpha=0.6), legend=False)
+            sns.stripplot(data=df_plot, x="Form", y="Energy", hue="Form", palette=colors, alpha=0.6, jitter=0.2, size=4.5, ax=ax, legend=False)
 
-        ax.set_title(f"Energy Distribution ({label})", fontsize=14, color="red", fontweight="bold", style="italic")
-        ax.set_xlabel(label, fontsize=16, fontweight="bold")
-        ax.set_ylabel("E (Kcal/mol)", fontsize=16, fontweight="bold")
+        ax.set_title(f"{metric_str} Energy ({label})", fontsize=14, color="red", fontweight="bold", style="italic")
+        ax.set_xlabel(label, fontsize=15, fontweight="bold")
+        ax.set_ylabel("E (kcal/mol)", fontsize=15, fontweight="bold")
 
-        # Annotate p-value using axes transAxes coordinates
-        p_val = summary["Ind_p_value"]
-        p_str = f"t-test, p = {p_val:.4f}" if p_val >= 0.0001 else f"t-test, p = {p_val:.2e}"
-        ax.text(0.5, 0.92, p_str, transform=ax.transAxes, ha="center", va="top", fontsize=12, fontweight="bold", bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+        p_str = f"paired t-test, p = {pair_p:.4f}" if pair_p >= 0.0001 else f"paired t-test, p = {pair_p:.2e}"
+        ax.text(0.5, 0.92, p_str, transform=ax.transAxes, ha="center", va="top", fontsize=12, fontweight="bold", bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.85))
 
         plt.tight_layout()
 
-        out_path1 = self.figures_dir / f"{filename_stem}_boxplot.png"
-        out_path2 = self.alt_figures_dir / f"{filename_stem}_boxplot.png"
-
-        fig.savefig(out_path1, dpi=300, bbox_inches="tight")
-        fig.savefig(out_path2, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved boxplot: {out_path1}")
-
+        stem = f"pdb_{metric.lower()}_energy_{region.lower()}"
+        out1 = self.figures_dir / f"{stem}_boxplot.png"
+        out2 = self.alt_figures_dir / f"{stem}_boxplot.png"
+        fig.savefig(out1, dpi=600, bbox_inches="tight")
+        fig.savefig(out2, dpi=600, bbox_inches="tight")
         plt.close(fig)
 
-    def plot_paired(self, df, label="Interface", filename_stem="energy_distribution"):
-        """
-        Generate paired line plot with paired t-test p-value annotation.
-        """
-        summary = self.compute_statistics(df)
-        if summary is None:
-            return
+        # Paired Line Plot
+        fig, ax = plt.subplots(figsize=(5.5, 5.5))
+        for u, b in zip(u_vals, b_vals):
+            ax.plot(["U", "B"], [u, b], color="gray", alpha=0.5, linewidth=0.8, zorder=1)
+            ax.scatter(["U", "B"], [u, b], c=["#B22222", "#004225"], s=25, zorder=2)
 
-        fig, ax = plt.subplots(figsize=(5, 5))
-
-        if "Res" in df.columns:
-            pivot_df = df.pivot(index="Res", columns="Form", values="Avg.E").dropna()
-            for res, row in pivot_df.iterrows():
-                ax.plot(["B", "U"], [row["B"], row["U"]], color="gray", alpha=0.6, linewidth=1, zorder=1)
-                ax.scatter(["B", "U"], [row["B"], row["U"]], c=["#004225", "#B22222"], s=30, zorder=2)
-        else:
-            b_vals = df[df["Form"] == "B"]["Avg.E"].values
-            u_vals = df[df["Form"] == "U"]["Avg.E"].values
-            for b, u in zip(b_vals, u_vals):
-                ax.plot(["B", "U"], [b, u], color="gray", alpha=0.6, linewidth=1, zorder=1)
-                ax.scatter(["B", "U"], [b, u], c=["#004225", "#B22222"], s=30, zorder=2)
-
-        ax.set_title(f"Paired Energy Comparison ({label})", fontsize=14, color="red", fontweight="bold", style="italic")
-        ax.set_xlabel(label, fontsize=16, fontweight="bold")
-        ax.set_ylabel("E (Kcal/mol)", fontsize=16, fontweight="bold")
-
-        # Annotate paired p-value
-        p_val = summary["Paired_p_value"]
-        if not np.isnan(p_val):
-            p_str = f"paired t-test, p = {p_val:.4f}" if p_val >= 0.0001 else f"paired t-test, p = {p_val:.2e}"
-            ax.text(0.5, 0.92, p_str, transform=ax.transAxes, ha="center", va="top", fontsize=12, fontweight="bold", bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+        ax.set_title(f"Paired {metric_str} Energy ({label})", fontsize=14, color="red", fontweight="bold", style="italic")
+        ax.set_xlabel(label, fontsize=15, fontweight="bold")
+        ax.set_ylabel("E (kcal/mol)", fontsize=15, fontweight="bold")
+        ax.text(0.5, 0.92, p_str, transform=ax.transAxes, ha="center", va="top", fontsize=12, fontweight="bold", bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.85))
 
         plt.tight_layout()
-
-        out_path1 = self.figures_dir / f"{filename_stem}_paired.png"
-        out_path2 = self.alt_figures_dir / f"{filename_stem}_paired.png"
-
-        fig.savefig(out_path1, dpi=300, bbox_inches="tight")
-        fig.savefig(out_path2, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved paired plot: {out_path1}")
-
+        out1_p = self.figures_dir / f"{stem}_paired.png"
+        out2_p = self.alt_figures_dir / f"{stem}_paired.png"
+        fig.savefig(out1_p, dpi=600, bbox_inches="tight")
+        fig.savefig(out2_p, dpi=600, bbox_inches="tight")
         plt.close(fig)
+
+        logging.info(f"Generated PDB plots for {metric_str} {label}: paired p = {pair_p:.4e}")
+
+    def plot_amino_acid_wise_energy(self, df_aa, aromatic_only=False, region="INT"):
+        """Generate Amino Acid-wise paired energy comparison plots (Bound vs Unbound)."""
+        df_work = df_aa.copy()
+        if aromatic_only:
+            df_work = df_work[df_work["AA"].isin(["HIS", "PHE", "TRP", "TYR"])]
+            title_prefix = "Aromatic Amino Acid"
+            stem_prefix = "aromatic_aa"
+        else:
+            title_prefix = "Amino Acid-Wise"
+            stem_prefix = "amino_acid"
+
+        u_col = "IU_AVG_DELG" if region == "INT" else "NU_AVG_DELG"
+        b_col = "IB_AVG_DELG" if region == "INT" else "NB_AVG_DELG"
+        region_label = "Interface" if region == "INT" else "Non-interface"
+
+        aas = df_work["AA"].values
+        u_vals = df_work[u_col].values
+        b_vals = df_work[b_col].values
+
+        # Perform paired t-test across amino acids
+        pair_stat, pair_p = stats.ttest_rel(b_vals, u_vals)
+
+        # Reshape into long DataFrame for grouped bar plot
+        df_long = pd.DataFrame({
+            "AA": np.repeat(aas, 2),
+            "Energy": np.concatenate([u_vals, b_vals]),
+            "State": np.repeat(["Unbound (U)", "Bound (B)"], len(aas))
+        })
+
+        fig, ax = plt.subplots(figsize=(10 if not aromatic_only else 6.5, 6))
+        palette = {"Unbound (U)": "#B22222", "Bound (B)": "#004225"}
+
+        if HAS_SEABORN:
+            sns.barplot(data=df_long, x="AA", y="Energy", hue="State", palette=palette, ax=ax, edgecolor="black", linewidth=1.0)
+
+        ax.set_title(f"{title_prefix} Energy Comparison ({region_label})\n(Paired t-test p = {pair_p:.4f})", fontsize=13, fontweight="bold", pad=12)
+        ax.set_xlabel("Amino Acid Type", fontsize=13, fontweight="bold")
+        ax.set_ylabel("Average Torsional Energy (kcal/mol)", fontsize=13, fontweight="bold")
+        ax.legend(title="State", frameon=True, facecolor="white")
+
+        plt.xticks(fontweight="bold")
+        plt.tight_layout()
+
+        stem = f"{stem_prefix}_energy_{region.lower()}"
+        out1 = self.figures_dir / f"{stem}_comparison.png"
+        out2 = self.alt_figures_dir / f"{stem}_comparison.png"
+
+        fig.savefig(out1, dpi=600, bbox_inches="tight")
+        fig.savefig(out2, dpi=600, bbox_inches="tight")
+        plt.close(fig)
+
+        logging.info(f"Generated {title_prefix} plot for {region_label}: paired p = {pair_p:.4e}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Energy P-Value Calculator and Visualizer.")
-    parser.add_argument("--data-file", type=Path, default=DATASET_DIR / "RBPs_BU_INT_187.dat", help="Path to input .dat energy file.")
-    parser.add_argument("--label", type=str, default=None, help="Region label (e.g. Interface or Non-interface).")
-    parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output figure directory.")
+    plotter = EnergyPValuePlotter()
 
-    args = parser.parse_args()
+    # Load JSON files
+    df_pdb = plotter.load_json("torsion_potential_energy_summary_187.json")
+    df_aa = plotter.load_json("amino_acid_torsion_energy_summary_187.json")
 
-    plotter = EnergyPValuePlotter(figures_dir=args.figures_dir)
+    if df_pdb is not None:
+        # 1. PDB Level Plots
+        plotter.plot_pdb_energy(df_pdb, region="INT", metric="AVG")
+        plotter.plot_pdb_energy(df_pdb, region="INT", metric="TOT")
+        plotter.plot_pdb_energy(df_pdb, region="NINT", metric="AVG")
+        plotter.plot_pdb_energy(df_pdb, region="NINT", metric="TOT")
 
-    df = plotter.load_data(args.data_file)
-    if df is not None:
-        label = args.label
-        if label is None:
-            label = "Non-interface" if "NINT" in str(args.data_file).upper() else "Interface"
+    if df_aa is not None:
+        # 2. Amino Acid Level Plots (All AAs)
+        plotter.plot_amino_acid_wise_energy(df_aa, aromatic_only=False, region="INT")
+        plotter.plot_amino_acid_wise_energy(df_aa, aromatic_only=False, region="NINT")
 
-        stem = args.data_file.stem
-        plotter.plot_boxplot(df, label=label, filename_stem=stem)
-        plotter.plot_paired(df, label=label, filename_stem=stem)
+        # 3. Aromatic Amino Acid Plots
+        plotter.plot_amino_acid_wise_energy(df_aa, aromatic_only=True, region="INT")
+        plotter.plot_amino_acid_wise_energy(df_aa, aromatic_only=True, region="NINT")
 
-        summary = plotter.compute_statistics(df)
-        summary_df = pd.DataFrame([summary])
-        out_csv = RESULTS_DIR / f"{stem}_stats_summary.csv"
-        summary_df.to_csv(out_csv, index=False)
-        logging.info(f"Exported statistical summary CSV: {out_csv}")
+    logging.info("All two-tailed t-test energy plots generated successfully from JSON summaries.")
 
 
 if __name__ == "__main__":

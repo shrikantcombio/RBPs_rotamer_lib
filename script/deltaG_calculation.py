@@ -6,8 +6,8 @@ Calculates backbone (Phi, Psi) and side-chain (Chi1..Chi5) torsion potential ene
 for bound and unbound protein structures using standardized AMBER force-field parameters (parm14SB / ff99SB).
 
 Generates:
-1. Structured CSV & JSON summary files for PDB-level and Amino Acid-level energy statistics.
-2. Correctly formatted .dat files for R statistical significance scripts (RBPs_energy_pvalue.R & RBPs_energy_avg_pvalue.R).
+1. PDB-level total and average energy JSON and CSV files across 187 structures at Interface (I) and Non-Interface (N).
+2. Amino Acid-level total and average energy JSON and CSV files across 17 amino acid types.
 
 Usage:
     python script/deltaG_calculation.py [options]
@@ -209,6 +209,7 @@ def calculate_dataset_pdb_energies(df_torsion, force_field="amber"):
     records = []
 
     for pdb in pdbs:
+        pdb_str = str(pdb).strip()
         df_pdb = df_torsion[df_torsion[pdb_col] == pdb]
 
         # Interface
@@ -224,7 +225,7 @@ def calculate_dataset_pdb_energies(df_torsion, force_field="amber"):
         e_b_nint = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_B"] for _, r in df_nint.iterrows())
 
         records.append({
-            "PDB_ID": str(pdb),
+            "PDB_ID": pdb_str,
             "IU_DELG": round(e_u_int, 6),
             "IB_DELG": round(e_b_int, 6),
             "IU_AVG_DELG": round(e_u_int / cnt_int, 6) if cnt_int > 0 else 0.0,
@@ -287,57 +288,6 @@ def calculate_dataset_aa_energies(df_torsion, force_field="amber"):
     return pd.DataFrame(records)
 
 
-def save_r_dat_files(df_pdb, df_aa, input_dir=INPUT_DIR):
-    """
-    Export correctly formatted .dat files required by R scripts (RBPs_energy_pvalue.R and RBPs_energy_avg_pvalue.R).
-    Format: Tab-separated with headers Res\tAvg.E\tForm
-    """
-    input_dir = Path(input_dir)
-    input_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. PDB Level DAT files for R scripts
-    # Interface Total Energy (RBPs_BU_INT_187.dat)
-    u_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IU_DELG"], "Form": "U"})
-    b_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IB_DELG"], "Form": "B"})
-    bu_int_df = pd.concat([u_int_df, b_int_df], ignore_index=True)
-    bu_int_df.to_csv(input_dir / "RBPs_BU_INT_187.dat", sep="\t", index=False)
-
-    # Interface Average Energy (RBPs_avg_BU_INT_187.dat)
-    u_avg_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IU_AVG_DELG"], "Form": "U"})
-    b_avg_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IB_AVG_DELG"], "Form": "B"})
-    bu_avg_int_df = pd.concat([u_avg_int_df, b_avg_int_df], ignore_index=True)
-    bu_avg_int_df.to_csv(input_dir / "RBPs_avg_BU_INT_187.dat", sep="\t", index=False)
-
-    # Non-Interface Total Energy (RBPs_BU_NINT_187.dat)
-    u_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NU_DELG"], "Form": "U"})
-    b_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NB_DELG"], "Form": "B"})
-    bu_nint_df = pd.concat([u_nint_df, b_nint_df], ignore_index=True)
-    bu_nint_df.to_csv(input_dir / "RBPs_BU_NINT_187.dat", sep="\t", index=False)
-
-    # Non-Interface Average Energy (RBPs_avg_BU_NINT_187.dat)
-    u_avg_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NU_AVG_DELG"], "Form": "U"})
-    b_avg_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NB_AVG_DELG"], "Form": "B"})
-    bu_avg_nint_df = pd.concat([u_avg_nint_df, b_avg_nint_df], ignore_index=True)
-    bu_avg_nint_df.to_csv(input_dir / "RBPs_avg_BU_NINT_187.dat", sep="\t", index=False)
-
-    # Combined RBPs_BU_187.dat (PDB_ID, Avg.E, Form)
-    bu_187_df = pd.concat([bu_int_df, bu_nint_df], ignore_index=True)
-    bu_187_df.to_csv(input_dir / "RBPs_BU_187.dat", sep="\t", index=False)
-
-    # 2. Amino Acid Level DAT files
-    u_aa_int = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["IU_AVG_DELG"], "Form": "U"})
-    b_aa_int = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["IB_AVG_DELG"], "Form": "B"})
-    bu_aa_int = pd.concat([u_aa_int, b_aa_int], ignore_index=True)
-    bu_aa_int.to_csv(input_dir / "RBPs_AA_avg_BU_INT_187.dat", sep="\t", index=False)
-
-    u_aa_nint = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["NU_AVG_DELG"], "Form": "U"})
-    b_aa_nint = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["NB_AVG_DELG"], "Form": "B"})
-    bu_aa_nint = pd.concat([u_aa_nint, b_aa_nint], ignore_index=True)
-    bu_aa_nint.to_csv(input_dir / "RBPs_AA_avg_BU_NINT_187.dat", sep="\t", index=False)
-
-    logging.info(f"Saved all DAT files under: {input_dir}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Calculate torsion potential energy (DeltaG) for bound and unbound protein structures.")
     parser.add_argument(
@@ -363,6 +313,8 @@ def main():
     df_pdb_energy = calculate_dataset_pdb_energies(df_torsion, force_field=args.force_field)
     pdb_csv = args.output_dir / "torsion_potential_energy_summary_187.csv"
     pdb_json = args.output_dir / "torsion_potential_energy_summary_187.json"
+    
+    # Save CSV and JSON
     df_pdb_energy.to_csv(pdb_csv, index=False)
     with open(pdb_json, "w") as f:
         json.dump(df_pdb_energy.to_dict(orient="records"), f, indent=2)
@@ -373,16 +325,14 @@ def main():
     df_aa_energy = calculate_dataset_aa_energies(df_torsion, force_field=args.force_field)
     aa_csv = args.output_dir / "amino_acid_torsion_energy_summary_187.csv"
     aa_json = args.output_dir / "amino_acid_torsion_energy_summary_187.json"
+    
     df_aa_energy.to_csv(aa_csv, index=False)
     with open(aa_json, "w") as f:
         json.dump(df_aa_energy.to_dict(orient="records"), f, indent=2)
 
     logging.info(f"Saved Amino Acid-level energy summary: {aa_csv} and {aa_json}")
 
-    # 3. Save R DAT files
-    save_r_dat_files(df_pdb_energy, df_aa_energy, input_dir=INPUT_DIR)
-
-    logging.info("DeltaG torsion energy calculation and file generation completed successfully.")
+    logging.info("DeltaG torsion energy calculation completed cleanly (JSON/CSV outputs updated, no .dat files created).")
 
 
 if __name__ == "__main__":
