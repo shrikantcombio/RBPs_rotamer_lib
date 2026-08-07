@@ -194,12 +194,12 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
     e_b = e_b_bb + e_b_sc
 
     return {
-        "E_U": round(e_u, 6),
-        "E_B": round(e_b, 6),
-        "DeltaE": round(e_u - e_b, 6),
-        "E_U_sc": round(e_u_sc, 6),
-        "E_B_sc": round(e_b_sc, 6),
-        "DeltaE_sc": round(e_u_sc - e_b_sc, 6),
+        "E_U": round(e_u, 3),
+        "E_B": round(e_b, 3),
+        "DeltaE": round(e_u - e_b, 3),
+        "E_U_sc": round(e_u_sc, 3),
+        "E_B_sc": round(e_b_sc, 3),
+        "DeltaE_sc": round(e_u_sc - e_b_sc, 3),
     }
 
 
@@ -230,15 +230,15 @@ def calculate_dataset_pdb_energies(df_torsion, force_field="amber"):
 
         records.append({
             "PDB_ID": pdb_str,
-            "IU_DELG": round(e_u_int, 6),
-            "IB_DELG": round(e_b_int, 6),
-            "IU_AVG_DELG": round(e_u_int / cnt_int, 6) if cnt_int > 0 else 0.0,
-            "IB_AVG_DELG": round(e_b_int / cnt_int, 6) if cnt_int > 0 else 0.0,
+            "IU_DELG": round(e_u_int, 3),
+            "IB_DELG": round(e_b_int, 3),
+            "IU_AVG_DELG": round(e_u_int / cnt_int, 3) if cnt_int > 0 else 0.0,
+            "IB_AVG_DELG": round(e_b_int / cnt_int, 3) if cnt_int > 0 else 0.0,
             "ICOUNT": cnt_int,
-            "NU_DELG": round(e_u_nint, 6),
-            "NB_DELG": round(e_b_nint, 6),
-            "NU_AVG_DELG": round(e_u_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
-            "NB_AVG_DELG": round(e_b_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
+            "NU_DELG": round(e_u_nint, 3),
+            "NB_DELG": round(e_b_nint, 3),
+            "NU_AVG_DELG": round(e_u_nint / cnt_nint, 3) if cnt_nint > 0 else 0.0,
+            "NB_AVG_DELG": round(e_b_nint / cnt_nint, 3) if cnt_nint > 0 else 0.0,
             "NCOUNT": cnt_nint
         })
 
