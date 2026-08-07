@@ -2,13 +2,12 @@
 """
 deltaG_calculation.py
 
-Calculates torsion potential energy (E_U, E_B, DeltaE = E_U - E_B) of side-chain (Chi1..Chi5)
-and backbone (Phi, Psi) dihedral angles for bound and unbound protein structures
-using standardized AMBER (ff99SB / ff14SB) force-field parameters.
+Calculates backbone (Phi, Psi) and side-chain (Chi1..Chi5) torsion potential energy (E_U, E_B, DeltaE = E_U - E_B)
+for bound and unbound protein structures using standardized AMBER force-field parameters (parm14SB / ff99SB).
 
-Empirical Torsion Energy Equation:
-    E = sum_{dihedrals} K_theta * { 1 + cos(m * theta_i + delta) }
-    DeltaE = E_U - E_B
+Generates:
+1. Structured CSV & JSON summary files for PDB-level and Amino Acid-level energy statistics.
+2. Correctly formatted .dat files for R statistical significance scripts (RBPs_energy_pvalue.R & RBPs_energy_avg_pvalue.R).
 
 Usage:
     python script/deltaG_calculation.py [options]
@@ -16,6 +15,7 @@ Usage:
 
 import argparse
 import logging
+import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -26,10 +26,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
-RESULTS_DIR = ROOT_DIR / "output_files"
+INPUT_DIR = ROOT_DIR / "input_files"
+OUTPUT_DIR = ROOT_DIR / "output_files"
 
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+INPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Gas constant * Temperature (RT in kcal/mol at ~298 K)
 RT = 0.59225621
@@ -141,9 +142,6 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
     """
     Calculates unbound torsional energy (E_U), bound torsional energy (E_B),
     and energy difference (DeltaE = E_U - E_B) for a single residue row containing Phi, Psi, Chi1..Chi5.
-
-    Returns dict with keys:
-        'E_U', 'E_B', 'DeltaE', 'E_U_sc', 'E_B_sc', 'DeltaE_sc', 'details'
     """
     K_phi = 0.8
     K_psi = 0.4
@@ -170,7 +168,6 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
 
     e_u_sc = 0.0
     e_b_sc = 0.0
-    chi_details = {}
 
     if res_name in DIHEDRAL_PARAMS:
         params = DIHEDRAL_PARAMS[res_name]
@@ -178,10 +175,6 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
             if chi_name in params:
                 u_col = f"U_{chi_name}"
                 b_col = f"B_{chi_name}"
-                if u_col not in row and chi_name.lower() in row:
-                    u_col = chi_name.lower()
-                if b_col not in row and chi_name.lower() in row:
-                    b_col = chi_name.lower()
 
                 u_ang = float(row.get(u_col, 0.0))
                 b_ang = float(row.get(b_col, 0.0))
@@ -190,136 +183,159 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
                 d_val = params[chi_name][2]
                 m_val = params[chi_name][3]
 
-                eu_chi = pot_fn(u_ang, k_val, m_val, d_val)
-                eb_chi = pot_fn(b_ang, k_val, m_val, d_val)
-
-                e_u_sc += eu_chi
-                e_b_sc += eb_chi
-                chi_details[chi_name] = {
-                    "u_ang": u_ang, "b_ang": b_ang,
-                    "E_U": round(eu_chi, 6), "E_B": round(eb_chi, 6),
-                    "DeltaE": round(eu_chi - eb_chi, 6)
-                }
+                e_u_sc += pot_fn(u_ang, k_val, m_val, d_val)
+                e_b_sc += pot_fn(b_ang, k_val, m_val, d_val)
 
     e_u = e_u_bb + e_u_sc
     e_b = e_b_bb + e_b_sc
-    delta_e = e_u - e_b
 
     return {
         "E_U": round(e_u, 6),
         "E_B": round(e_b, 6),
-        "DeltaE": round(delta_e, 6),
+        "DeltaE": round(e_u - e_b, 6),
         "E_U_sc": round(e_u_sc, 6),
         "E_B_sc": round(e_b_sc, 6),
         "DeltaE_sc": round(e_u_sc - e_b_sc, 6),
-        "details": chi_details
     }
 
 
-def calculate_single_pdb_energy(df_pdb, sasa_tag, mode="all", force_field="charmm"):
+def calculate_dataset_pdb_energies(df_torsion, force_field="amber"):
     """
-    Calculate total and average torsion potential energy for bound and unbound states of a single PDB structure.
+    Calculate PDB-level total and average torsion potential energy for interface (I) and non-interface (N).
     """
-    pdb_id = str(df_pdb["PDB"].iloc[0]) if "PDB" in df_pdb.columns else "PDB"
-    e_u = 0.0
-    e_b = 0.0
-    res_count = 0
-
-    for _, row in df_pdb.iterrows():
-        lbl = str(row.get("LABEL", "")).strip()
-        res_name = lbl.split()[0] if lbl else str(row.get("AA", "GLY")).strip().upper()
-
-        if res_name in EXCLUDED_RESIDUES:
-            continue
-
-        sasa_val = str(row.get("SASA", "N")).strip()
-        if sasa_val != sasa_tag:
-            continue
-
-        if mode == "aromatic" and res_name not in AA_AROMATIC:
-            continue
-
-        if res_name not in DIHEDRAL_PARAMS:
-            continue
-
-        res_count += 1
-        res_energy = calculate_residue_torsion_energy(row, force_field=force_field, include_backbone=True)
-
-        e_u += res_energy["E_U"]
-        e_b += res_energy["E_B"]
-
-    e_u_avg = (e_u / res_count) if res_count > 0 else 0.0
-    e_b_avg = (e_b / res_count) if res_count > 0 else 0.0
-
-    return {
-        "PDB": pdb_id,
-        "E_unbound": round(e_u, 6),
-        "E_bound": round(e_b, 6),
-        "E_unbound_avg": round(e_u_avg, 6),
-        "E_bound_avg": round(e_b_avg, 6),
-        "count": res_count,
-    }
-
-
-def calculate_dataset_torsion_energy(df_torsion, mode="all", force_field="amber"):
-    """
-    Calculate torsion potential energies across all PDBs in dataset for Interface and Non-interface states.
-    """
-    logging.info(f"Calculating dataset torsion energy (mode='{mode}', force_field='{force_field}')...")
+    logging.info(f"Computing PDB-level torsion energies across dataset (force_field='{force_field}')...")
     pdb_col = "PDB" if "PDB" in df_torsion.columns else "PDB_ID"
     pdbs = df_torsion[pdb_col].unique()
-    energy_records = []
+    records = []
 
     for pdb in pdbs:
         df_pdb = df_torsion[df_torsion[pdb_col] == pdb]
 
-        res_int = calculate_single_pdb_energy(df_pdb, sasa_tag="I", mode=mode, force_field=force_field)
-        res_nint = calculate_single_pdb_energy(df_pdb, sasa_tag="N", mode=mode, force_field=force_field)
+        # Interface
+        df_int = df_pdb[df_pdb["SASA"].astype(str).str.strip() == "I"]
+        cnt_int = len(df_int)
+        e_u_int = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_U"] for _, r in df_int.iterrows())
+        e_b_int = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_B"] for _, r in df_int.iterrows())
 
-        record = {
-            "PDB": pdb,
-            "IU_DELG": res_int["E_unbound"],
-            "IB_DELG": res_int["E_bound"],
-            "IU_AVG_DELG": res_int["E_unbound_avg"],
-            "IB_AVG_DELG": res_int["E_bound_avg"],
-            "ICOUNT": res_int["count"],
-            "NU_DELG": res_nint["E_unbound"],
-            "NB_DELG": res_nint["E_bound"],
-            "NU_AVG_DELG": res_nint["E_unbound_avg"],
-            "NB_AVG_DELG": res_nint["E_bound_avg"],
-            "NCOUNT": res_nint["count"],
-        }
-        energy_records.append(record)
+        # Non-interface
+        df_nint = df_pdb[df_pdb["SASA"].astype(str).str.strip() == "N"]
+        cnt_nint = len(df_nint)
+        e_u_nint = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_U"] for _, r in df_nint.iterrows())
+        e_b_nint = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_B"] for _, r in df_nint.iterrows())
 
-    df_energy = pd.DataFrame(energy_records)
-    logging.info(f"Computed potential energy for {len(df_energy)} PDB entries.")
-    return df_energy
+        records.append({
+            "PDB_ID": str(pdb),
+            "IU_DELG": round(e_u_int, 6),
+            "IB_DELG": round(e_b_int, 6),
+            "IU_AVG_DELG": round(e_u_int / cnt_int, 6) if cnt_int > 0 else 0.0,
+            "IB_AVG_DELG": round(e_b_int / cnt_int, 6) if cnt_int > 0 else 0.0,
+            "ICOUNT": cnt_int,
+            "NU_DELG": round(e_u_nint, 6),
+            "NB_DELG": round(e_b_nint, 6),
+            "NU_AVG_DELG": round(e_u_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
+            "NB_AVG_DELG": round(e_b_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
+            "NCOUNT": cnt_nint
+        })
+
+    return pd.DataFrame(records)
 
 
-def save_energy_dat_files(df_energy, output_dir=RESULTS_DIR, prefix="RBPs"):
+def calculate_dataset_aa_energies(df_torsion, force_field="amber"):
     """
-    Save individual energy .dat files matching classical output formats.
+    Calculate Amino Acid-level total and average torsion potential energy for interface (I) and non-interface (N).
     """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Computing Amino Acid-level torsion energies across dataset...")
+    df_work = df_torsion.copy()
+    if "AA" not in df_work.columns:
+        df_work["AA"] = df_work["LABEL"].apply(lambda s: str(s).split()[0] if str(s).strip() else "GLY")
 
-    files_map = {
-        f"{prefix}_B_INT_187.dat": ("IB_DELG", "B"),
-        f"{prefix}_B_NINT_187.dat": ("NB_DELG", "B"),
-        f"{prefix}_avg_B_INT_187.dat": ("IB_AVG_DELG", "B"),
-        f"{prefix}_avg_B_NINT_187.dat": ("NB_AVG_DELG", "B"),
-        f"{prefix}_U_INT_187.dat": ("IU_DELG", "U"),
-        f"{prefix}_U_NINT_187.dat": ("NU_DELG", "U"),
-        f"{prefix}_avg_U_INT_187.dat": ("IU_AVG_DELG", "U"),
-        f"{prefix}_avg_U_NINT_187.dat": ("NU_AVG_DELG", "U"),
-    }
+    aa_types = sorted(df_work["AA"].unique())
+    records = []
 
-    for fname, (col_name, state) in files_map.items():
-        file_path = output_dir / fname
-        with open(file_path, "w") as f:
-            for _, row in df_energy.iterrows():
-                f.write(f"{row['PDB']}\t{row[col_name]}\t{state}\n")
-        logging.info(f"Saved energy DAT file: {file_path}")
+    for aa in aa_types:
+        if aa in EXCLUDED_RESIDUES or aa not in DIHEDRAL_PARAMS:
+            continue
+
+        df_aa = df_work[df_work["AA"] == aa]
+
+        # Interface
+        df_int = df_aa[df_aa["SASA"].astype(str).str.strip() == "I"]
+        cnt_int = len(df_int)
+        e_u_int = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_U"] for _, r in df_int.iterrows())
+        e_b_int = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_B"] for _, r in df_int.iterrows())
+
+        # Non-interface
+        df_nint = df_aa[df_aa["SASA"].astype(str).str.strip() == "N"]
+        cnt_nint = len(df_nint)
+        e_u_nint = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_U"] for _, r in df_nint.iterrows())
+        e_b_nint = sum(calculate_residue_torsion_energy(r, force_field=force_field)["E_B"] for _, r in df_nint.iterrows())
+
+        records.append({
+            "AA": str(aa),
+            "IU_DELG": round(e_u_int, 6),
+            "IB_DELG": round(e_b_int, 6),
+            "IU_AVG_DELG": round(e_u_int / cnt_int, 6) if cnt_int > 0 else 0.0,
+            "IB_AVG_DELG": round(e_b_int / cnt_int, 6) if cnt_int > 0 else 0.0,
+            "ICOUNT": cnt_int,
+            "NU_DELG": round(e_u_nint, 6),
+            "NB_DELG": round(e_b_nint, 6),
+            "NU_AVG_DELG": round(e_u_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
+            "NB_AVG_DELG": round(e_b_nint / cnt_nint, 6) if cnt_nint > 0 else 0.0,
+            "NCOUNT": cnt_nint
+        })
+
+    return pd.DataFrame(records)
+
+
+def save_r_dat_files(df_pdb, df_aa, input_dir=INPUT_DIR):
+    """
+    Export correctly formatted .dat files required by R scripts (RBPs_energy_pvalue.R and RBPs_energy_avg_pvalue.R).
+    Format: Tab-separated with headers Res\tAvg.E\tForm
+    """
+    input_dir = Path(input_dir)
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. PDB Level DAT files for R scripts
+    # Interface Total Energy (RBPs_BU_INT_187.dat)
+    u_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IU_DELG"], "Form": "U"})
+    b_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IB_DELG"], "Form": "B"})
+    bu_int_df = pd.concat([u_int_df, b_int_df], ignore_index=True)
+    bu_int_df.to_csv(input_dir / "RBPs_BU_INT_187.dat", sep="\t", index=False)
+
+    # Interface Average Energy (RBPs_avg_BU_INT_187.dat)
+    u_avg_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IU_AVG_DELG"], "Form": "U"})
+    b_avg_int_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["IB_AVG_DELG"], "Form": "B"})
+    bu_avg_int_df = pd.concat([u_avg_int_df, b_avg_int_df], ignore_index=True)
+    bu_avg_int_df.to_csv(input_dir / "RBPs_avg_BU_INT_187.dat", sep="\t", index=False)
+
+    # Non-Interface Total Energy (RBPs_BU_NINT_187.dat)
+    u_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NU_DELG"], "Form": "U"})
+    b_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NB_DELG"], "Form": "B"})
+    bu_nint_df = pd.concat([u_nint_df, b_nint_df], ignore_index=True)
+    bu_nint_df.to_csv(input_dir / "RBPs_BU_NINT_187.dat", sep="\t", index=False)
+
+    # Non-Interface Average Energy (RBPs_avg_BU_NINT_187.dat)
+    u_avg_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NU_AVG_DELG"], "Form": "U"})
+    b_avg_nint_df = pd.DataFrame({"Res": df_pdb["PDB_ID"], "Avg.E": df_pdb["NB_AVG_DELG"], "Form": "B"})
+    bu_avg_nint_df = pd.concat([u_avg_nint_df, b_avg_nint_df], ignore_index=True)
+    bu_avg_nint_df.to_csv(input_dir / "RBPs_avg_BU_NINT_187.dat", sep="\t", index=False)
+
+    # Combined RBPs_BU_187.dat (PDB_ID, Avg.E, Form)
+    bu_187_df = pd.concat([bu_int_df, bu_nint_df], ignore_index=True)
+    bu_187_df.to_csv(input_dir / "RBPs_BU_187.dat", sep="\t", index=False)
+
+    # 2. Amino Acid Level DAT files
+    u_aa_int = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["IU_AVG_DELG"], "Form": "U"})
+    b_aa_int = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["IB_AVG_DELG"], "Form": "B"})
+    bu_aa_int = pd.concat([u_aa_int, b_aa_int], ignore_index=True)
+    bu_aa_int.to_csv(input_dir / "RBPs_AA_avg_BU_INT_187.dat", sep="\t", index=False)
+
+    u_aa_nint = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["NU_AVG_DELG"], "Form": "U"})
+    b_aa_nint = pd.DataFrame({"Res": df_aa["AA"], "Avg.E": df_aa["NB_AVG_DELG"], "Form": "B"})
+    bu_aa_nint = pd.concat([u_aa_nint, b_aa_nint], ignore_index=True)
+    bu_aa_nint.to_csv(input_dir / "RBPs_AA_avg_BU_NINT_187.dat", sep="\t", index=False)
+
+    logging.info(f"Saved all DAT files under: {input_dir}")
 
 
 def main():
@@ -327,11 +343,10 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
+        default=INPUT_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.tsv",
         help="Path to backbone & sidechain torsion angle dataset file.",
     )
-    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for energy files.")
-    parser.add_argument("--mode", type=str, default="all", choices=["all", "aromatic"], help="Torsion calculation mode.")
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR, help="Output directory for energy files.")
     parser.add_argument("--force-field", type=str, default="amber", choices=["charmm", "amber"], help="Force field energy function formulation.")
 
     args = parser.parse_args()
@@ -341,24 +356,33 @@ def main():
         logging.error(f"Input file not found: {args.input_file}")
         return
 
-    try:
-        df_torsion = pd.read_csv(args.input_file, sep=",")
-        if "LABEL" not in df_torsion.columns and "AA" not in df_torsion.columns:
-            df_torsion = pd.read_csv(args.input_file, sep="\t")
-    except Exception:
-        df_torsion = pd.read_csv(args.input_file, sep="\t")
-
+    df_torsion = pd.read_csv(args.input_file, sep="\t", keep_default_na=False)
     logging.info(f"Loaded dataset with {len(df_torsion)} residue entries from {args.input_file}")
 
-    df_energy = calculate_dataset_torsion_energy(df_torsion, mode=args.mode, force_field=args.force_field)
+    # 1. PDB Level Energies
+    df_pdb_energy = calculate_dataset_pdb_energies(df_torsion, force_field=args.force_field)
+    pdb_csv = args.output_dir / "torsion_potential_energy_summary_187.csv"
+    pdb_json = args.output_dir / "torsion_potential_energy_summary_187.json"
+    df_pdb_energy.to_csv(pdb_csv, index=False)
+    with open(pdb_json, "w") as f:
+        json.dump(df_pdb_energy.to_dict(orient="records"), f, indent=2)
 
-    output_csv = args.output_dir / "torsion_potential_energy_summary.csv"
-    df_energy.to_csv(output_csv, index=False)
-    logging.info(f"Saved unified energy summary table to: {output_csv}")
+    logging.info(f"Saved PDB-level energy summary: {pdb_csv} and {pdb_json}")
 
-    save_energy_dat_files(df_energy, output_dir=args.output_dir)
+    # 2. Amino Acid Level Energies
+    df_aa_energy = calculate_dataset_aa_energies(df_torsion, force_field=args.force_field)
+    aa_csv = args.output_dir / "amino_acid_torsion_energy_summary_187.csv"
+    aa_json = args.output_dir / "amino_acid_torsion_energy_summary_187.json"
+    df_aa_energy.to_csv(aa_csv, index=False)
+    with open(aa_json, "w") as f:
+        json.dump(df_aa_energy.to_dict(orient="records"), f, indent=2)
 
-    logging.info("DeltaG torsion energy calculation completed successfully.")
+    logging.info(f"Saved Amino Acid-level energy summary: {aa_csv} and {aa_json}")
+
+    # 3. Save R DAT files
+    save_r_dat_files(df_pdb_energy, df_aa_energy, input_dir=INPUT_DIR)
+
+    logging.info("DeltaG torsion energy calculation and file generation completed successfully.")
 
 
 if __name__ == "__main__":
