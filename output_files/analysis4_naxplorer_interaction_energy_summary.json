@@ -1,0 +1,34 @@
+[
+  {
+    "NAX_CATEGORY": "PI_STACKING",
+    "Total_Residues": 26,
+    "Rotamer_Changed_Percent": 34.62,
+    "DeltaE_Mean": 0.098,
+    "DeltaE_Std": 1.053,
+    "NAX_E_int_Mean": 16.219
+  },
+  {
+    "NAX_CATEGORY": "H_BOND",
+    "Total_Residues": 19,
+    "Rotamer_Changed_Percent": 47.37,
+    "DeltaE_Mean": 0.191,
+    "DeltaE_Std": 0.575,
+    "NAX_E_int_Mean": -22.731
+  },
+  {
+    "NAX_CATEGORY": "SALT_BRIDGE",
+    "Total_Residues": 5,
+    "Rotamer_Changed_Percent": 0.0,
+    "DeltaE_Mean": -0.063,
+    "DeltaE_Std": 0.387,
+    "NAX_E_int_Mean": -352.764
+  },
+  {
+    "NAX_CATEGORY": "NO_DIRECT_CONTACT",
+    "Total_Residues": 58393,
+    "Rotamer_Changed_Percent": 27.49,
+    "DeltaE_Mean": -0.004,
+    "DeltaE_Std": 0.677,
+    "NAX_E_int_Mean": 0.0
+  }
+]

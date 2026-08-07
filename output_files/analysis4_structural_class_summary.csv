@@ -1,0 +1,5 @@
+Structural_Class,Class_Name,Interface_Total,Interface_Transition_Rate_Percent,Interface_Rigid_Percent,Interface_CS_Percent,Interface_IF_Percent,DeltaE_Mean
+A,Class A (tRNA),1501,40.04,59.96,27.32,12.72,0.01
+B,Class B (rRNA),221,46.61,53.39,28.96,17.65,-0.047
+C,Class C (Duplex-RNA),1994,42.73,57.27,28.59,14.14,-0.012
+D,Class D (ssRNA),2581,33.59,66.41,23.17,10.42,0.0
