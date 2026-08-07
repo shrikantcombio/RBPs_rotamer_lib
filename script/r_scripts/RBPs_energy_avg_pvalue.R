@@ -2,18 +2,15 @@
 # ==============================================================================
 # RBPs_energy_avg_pvalue.R
 # ------------------------------------------------------------------------------
-# Refactored R script matching sample_R_plot aesthetics for Average Torsional Energy.
-# Loads directly from JSON summary files (preserving exact PDB IDs and string formats).
+# R script using ggpubr (ggboxplot and ggpaired) to compute t-tests and generate
+# publication-quality boxplots and paired line plots for Average Torsional Energy.
 #
-# Aesthetics & Parameters (matching sample_R_plot):
-#   - Lancet palette: U = #00468B (Dark Blue), B = #ED0000 (Lancet Red)
-#   - Independent & paired t-test p-value annotation top-center
-#   - font("xlab", size = 16), font("ylab", size = 16), font("axis.text", size = 14)
-#   - Line color = "gray", line size = 0.4
-#   - Title REMOVED (plot.title = element_blank())
+# Direct JSON loading to preserve exact string formats (e.g. 4E78).
+# Saves both TIFF (600 DPI LZW) and PNG (600 DPI) formats.
 #
 # Dynamic Filename Formatting:
-#   avg_energy_<subset>_<region>_avg_boxplot.png / avg_paired.png / .tiff
+#   avg_energy_<subset>_<region>_avg_boxplot.tiff / .png
+#   avg_energy_<subset>_<region>_avg_paired.tiff / .png
 #   where subset in {pdb, aa, aromatic} and region in {int, nint}
 #
 # Usage:
@@ -22,6 +19,7 @@
 
 suppressPackageStartupMessages({
   library(ggplot2)
+  library(ggpubr)
   library(jsonlite)
   library(tools)
 })
@@ -86,7 +84,7 @@ if (is_aa_level) {
   }
 }
 
-# Construct long dataframe for ggplot
+# Construct long dataframe for ggpubr
 mydata <- data.frame(
   Res = rep(res_ids, 2),
   Avg.E = c(u_vals, b_vals),
@@ -95,65 +93,41 @@ mydata <- data.frame(
 
 mydata <- mydata[!is.na(mydata$Avg.E), ]
 
-b_vec <- mydata$Avg.E[mydata$Form == "B"]
-u_vec <- mydata$Avg.E[mydata$Form == "U"]
-
-# Compute two-tailed independent and paired t-tests
-tt_ind <- t.test(b_vec, u_vec, paired = FALSE)
-tt_pair <- t.test(b_vec, u_vec, paired = TRUE)
-
-pval_ind_str <- paste0("p = ", format.pval(tt_ind$p.value, digits = 3))
-pval_pair_str <- paste0("p = ", format.pval(tt_pair$p.value, digits = 3))
-
-max_y <- max(mydata$Avg.E, na.rm = TRUE)
-min_y <- min(mydata$Avg.E, na.rm = TRUE)
-y_top <- max_y + (max_y - min_y) * 0.12
-
 # Dynamic publication filename stem
 filename_base <- paste0("avg_energy_", subset_tag, "_", region_tag)
 
-# Lancet palette colors (Dark Blue for U, Lancet Red for B)
-lancet_colors <- c("U" = "#00468B", "B" = "#ED0000")
+# 1. ggboxplot using ggpubr + lancet palette + stat_compare_means (t.test)
+p_box <- ggboxplot(
+  mydata, x = "Form", y = "Avg.E", xlab = mlab, ylab = "E (Kcal/mol)",
+  color = "Form", palette = "lancet", add = "jitter"
+) +
+  stat_compare_means(method = "t.test", label.x.npc = "center", label.y.npc = "top") +
+  font("xlab", size = 16, face = "bold") +
+  font("ylab", size = 16, face = "bold") +
+  font("legend.title", face = "bold", size = 16) +
+  theme(plot.title = element_blank())
 
-# 1. Boxplot (matching sample_R_plot ggboxplot + Lancet palette + jitter)
-p_box <- ggplot(mydata, aes(x = Form, y = Avg.E, color = Form, fill = Form)) +
-  geom_boxplot(alpha = 0.5, outlier.shape = NA, width = 0.45, linewidth = 0.6) +
-  geom_jitter(width = 0.2, alpha = 0.7, size = 1.8) +
-  annotate("text", x = 1.5, y = y_top, label = pval_ind_str, size = 5, fontface = "bold") +
-  scale_color_manual(values = lancet_colors) +
-  scale_fill_manual(values = lancet_colors) +
-  scale_x_discrete(labels = c("U" = "U", "B" = "B")) +
-  labs(x = mlab, y = "E (Kcal/mol)") +
-  theme_bw(base_size = 14) +
-  theme(
-    plot.title = element_blank(),
-    axis.title.x = element_text(size = 16, face = "bold"),
-    axis.title.y = element_text(size = 16, face = "bold"),
-    axis.text = element_text(size = 14, face = "bold", color = "black"),
-    legend.position = "none"
-  )
-
+# Save PNG and TIFF
 ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 4.5, height = 4.5, dpi = 600)
 ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_boxplot.png")), plot = p_box, width = 4.5, height = 4.5, dpi = 600)
+ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_boxplot.tiff")), plot = p_box, width = 4.5, height = 4.5, dpi = 600, device = "tiff", compression = "lzw")
+ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_boxplot.tiff")), plot = p_box, width = 4.5, height = 4.5, dpi = 600, device = "tiff", compression = "lzw")
 
-# 2. Paired Plot (matching sample_R_plot ggpaired + line.color="gray", line.size=0.4 + jitter)
-p_paired <- ggplot(mydata, aes(x = Form, y = Avg.E, group = Res, color = Form)) +
-  geom_line(color = "gray", linewidth = 0.4, alpha = 0.7) +
-  geom_point(size = 2.2, alpha = 0.85) +
-  annotate("text", x = 1.5, y = y_top, label = pval_pair_str, size = 5, fontface = "bold") +
-  scale_color_manual(values = lancet_colors) +
-  scale_x_discrete(labels = c("U" = "U", "B" = "B")) +
-  labs(x = mlab, y = "E (Kcal/mol)") +
-  theme_bw(base_size = 14) +
-  theme(
-    plot.title = element_blank(),
-    axis.title.x = element_text(size = 16, face = "bold"),
-    axis.title.y = element_text(size = 16, face = "bold"),
-    axis.text = element_text(size = 14, face = "bold", color = "black"),
-    legend.position = "none"
-  )
+# 2. ggpaired using ggpubr + lancet palette + stat_compare_means (paired t.test)
+p_paired <- ggpaired(
+  mydata, x = "Form", y = "Avg.E", xlab = mlab, ylab = "E (Kcal/mol)",
+  color = "Form", palette = "lancet", line.color = "gray", line.size = 0.4, add = "jitter"
+) +
+  stat_compare_means(method = "t.test", paired = TRUE, label.x.npc = "center", label.y.npc = "top") +
+  font("xlab", size = 16, face = "bold") +
+  font("ylab", size = 16, face = "bold") +
+  font("legend.title", face = "bold", size = 16) +
+  theme(plot.title = element_blank())
 
+# Save PNG and TIFF
 ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600)
 ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_paired.png")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600)
+ggsave(file.path(fig_dir1, paste0(filename_base, "_avg_paired.tiff")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600, device = "tiff", compression = "lzw")
+ggsave(file.path(fig_dir2, paste0(filename_base, "_avg_paired.tiff")), plot = p_paired, width = 4.5, height = 4.5, dpi = 600, device = "tiff", compression = "lzw")
 
-cat("Successfully generated publication-quality average energy plots (Lancet palette, No title, dynamic filename):", filename_base, "\n")
+cat("Successfully generated publication-quality average energy plots (ggpubr Lancet, PNG + TIFF):", filename_base, "\n")
