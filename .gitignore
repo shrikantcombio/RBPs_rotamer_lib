@@ -1,1 +1,11 @@
 PRDBv3_dataset
+# pycaches
+utils/__pycache__
+script/__pycache__
+notebook/__pycache__
+notebook/*
+output_files/*
+figure/*
+figures/*
+manuscript_results/*
+manuscript_results/
