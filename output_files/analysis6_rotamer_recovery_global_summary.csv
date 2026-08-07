@@ -1,0 +1,2 @@
+Interface_Total,Interface_RBP_Library_Recovery_Percent,Interface_PPI_Library_Recovery_Percent,Interface_Recovery_Gain_Percent,NonInterface_Total,NonInterface_RBP_Library_Recovery_Percent,NonInterface_PPI_Library_Recovery_Percent,NonInterface_Recovery_Gain_Percent,McNemar_Stat,McNemar_p_value
+6336,75.99,0.0,75.99,52107,78.97,0.0,78.97,4813.0002,0.0

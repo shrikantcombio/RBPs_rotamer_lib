@@ -1,0 +1,12 @@
+{
+  "Interface_Total": 6336,
+  "Interface_RBP_Library_Recovery_Percent": 75.99,
+  "Interface_PPI_Library_Recovery_Percent": 0.0,
+  "Interface_Recovery_Gain_Percent": 75.99,
+  "NonInterface_Total": 52107,
+  "NonInterface_RBP_Library_Recovery_Percent": 78.97,
+  "NonInterface_PPI_Library_Recovery_Percent": 0.0,
+  "NonInterface_Recovery_Gain_Percent": 78.97,
+  "McNemar_Stat": 4813.0002,
+  "McNemar_p_value": 0.0
+}

@@ -1,0 +1,128 @@
+[
+  {
+    "AA": "TRP",
+    "Interface_Total": 68,
+    "RBP_Library_Accuracy_Percent": 97.06,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 97.06
+  },
+  {
+    "AA": "PRO",
+    "Interface_Total": 309,
+    "RBP_Library_Accuracy_Percent": 96.44,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 96.44
+  },
+  {
+    "AA": "CYS",
+    "Interface_Total": 78,
+    "RBP_Library_Accuracy_Percent": 94.87,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 94.87
+  },
+  {
+    "AA": "TYR",
+    "Interface_Total": 331,
+    "RBP_Library_Accuracy_Percent": 94.26,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 94.26
+  },
+  {
+    "AA": "PHE",
+    "Interface_Total": 292,
+    "RBP_Library_Accuracy_Percent": 91.78,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 91.78
+  },
+  {
+    "AA": "ILE",
+    "Interface_Total": 301,
+    "RBP_Library_Accuracy_Percent": 91.03,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 91.03
+  },
+  {
+    "AA": "HIS",
+    "Interface_Total": 249,
+    "RBP_Library_Accuracy_Percent": 88.76,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 88.76
+  },
+  {
+    "AA": "MET",
+    "Interface_Total": 140,
+    "RBP_Library_Accuracy_Percent": 87.14,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 87.14
+  },
+  {
+    "AA": "ASP",
+    "Interface_Total": 357,
+    "RBP_Library_Accuracy_Percent": 87.11,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 87.11
+  },
+  {
+    "AA": "THR",
+    "Interface_Total": 390,
+    "RBP_Library_Accuracy_Percent": 86.15,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 86.15
+  },
+  {
+    "AA": "LEU",
+    "Interface_Total": 375,
+    "RBP_Library_Accuracy_Percent": 84.0,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 84.0
+  },
+  {
+    "AA": "ASN",
+    "Interface_Total": 393,
+    "RBP_Library_Accuracy_Percent": 82.7,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 82.7
+  },
+  {
+    "AA": "VAL",
+    "Interface_Total": 297,
+    "RBP_Library_Accuracy_Percent": 81.14,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 81.14
+  },
+  {
+    "AA": "SER",
+    "Interface_Total": 489,
+    "RBP_Library_Accuracy_Percent": 74.85,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 74.85
+  },
+  {
+    "AA": "GLN",
+    "Interface_Total": 302,
+    "RBP_Library_Accuracy_Percent": 72.85,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 72.85
+  },
+  {
+    "AA": "GLU",
+    "Interface_Total": 354,
+    "RBP_Library_Accuracy_Percent": 64.97,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 64.97
+  },
+  {
+    "AA": "LYS",
+    "Interface_Total": 743,
+    "RBP_Library_Accuracy_Percent": 55.05,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 55.05
+  },
+  {
+    "AA": "ARG",
+    "Interface_Total": 868,
+    "RBP_Library_Accuracy_Percent": 49.19,
+    "PPI_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 49.19
+  }
+]
