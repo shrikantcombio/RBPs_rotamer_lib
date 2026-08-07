@@ -1,0 +1,182 @@
+[
+  {
+    "AA": "TRP",
+    "Interface_Total": 68,
+    "Interface_Trans": 23,
+    "Interface_Trans_Rate": 33.82,
+    "NonInterface_Total": 728,
+    "NonInterface_Trans": 46,
+    "NonInterface_Trans_Rate": 6.32,
+    "Odds_Ratio": 7.578
+  },
+  {
+    "AA": "PHE",
+    "Interface_Total": 292,
+    "Interface_Trans": 55,
+    "Interface_Trans_Rate": 18.84,
+    "NonInterface_Total": 2505,
+    "NonInterface_Trans": 159,
+    "NonInterface_Trans_Rate": 6.35,
+    "Odds_Ratio": 3.424
+  },
+  {
+    "AA": "TYR",
+    "Interface_Total": 331,
+    "Interface_Trans": 41,
+    "Interface_Trans_Rate": 12.39,
+    "NonInterface_Total": 2220,
+    "NonInterface_Trans": 127,
+    "NonInterface_Trans_Rate": 5.72,
+    "Odds_Ratio": 2.33
+  },
+  {
+    "AA": "ARG",
+    "Interface_Total": 868,
+    "Interface_Trans": 607,
+    "Interface_Trans_Rate": 69.93,
+    "NonInterface_Total": 3420,
+    "NonInterface_Trans": 1790,
+    "NonInterface_Trans_Rate": 52.34,
+    "Odds_Ratio": 2.118
+  },
+  {
+    "AA": "MET",
+    "Interface_Total": 140,
+    "Interface_Trans": 61,
+    "Interface_Trans_Rate": 43.57,
+    "NonInterface_Total": 1241,
+    "NonInterface_Trans": 351,
+    "NonInterface_Trans_Rate": 28.28,
+    "Odds_Ratio": 1.958
+  },
+  {
+    "AA": "GLN",
+    "Interface_Total": 302,
+    "Interface_Trans": 161,
+    "Interface_Trans_Rate": 53.31,
+    "NonInterface_Total": 2231,
+    "NonInterface_Trans": 877,
+    "NonInterface_Trans_Rate": 39.31,
+    "Odds_Ratio": 1.763
+  },
+  {
+    "AA": "ASP",
+    "Interface_Total": 357,
+    "Interface_Trans": 92,
+    "Interface_Trans_Rate": 25.77,
+    "NonInterface_Total": 3603,
+    "NonInterface_Trans": 620,
+    "NonInterface_Trans_Rate": 17.21,
+    "Odds_Ratio": 1.67
+  },
+  {
+    "AA": "HIS",
+    "Interface_Total": 249,
+    "Interface_Trans": 44,
+    "Interface_Trans_Rate": 17.67,
+    "NonInterface_Total": 1383,
+    "NonInterface_Trans": 162,
+    "NonInterface_Trans_Rate": 11.71,
+    "Odds_Ratio": 1.618
+  },
+  {
+    "AA": "ASN",
+    "Interface_Total": 393,
+    "Interface_Trans": 109,
+    "Interface_Trans_Rate": 27.74,
+    "NonInterface_Total": 2557,
+    "NonInterface_Trans": 497,
+    "NonInterface_Trans_Rate": 19.44,
+    "Odds_Ratio": 1.591
+  },
+  {
+    "AA": "ILE",
+    "Interface_Total": 301,
+    "Interface_Trans": 56,
+    "Interface_Trans_Rate": 18.6,
+    "NonInterface_Total": 3534,
+    "NonInterface_Trans": 444,
+    "NonInterface_Trans_Rate": 12.56,
+    "Odds_Ratio": 1.591
+  },
+  {
+    "AA": "GLU",
+    "Interface_Total": 354,
+    "Interface_Trans": 200,
+    "Interface_Trans_Rate": 56.5,
+    "NonInterface_Total": 4826,
+    "NonInterface_Trans": 2171,
+    "NonInterface_Trans_Rate": 44.99,
+    "Odds_Ratio": 1.588
+  },
+  {
+    "AA": "LYS",
+    "Interface_Total": 743,
+    "Interface_Trans": 488,
+    "Interface_Trans_Rate": 65.68,
+    "NonInterface_Total": 4292,
+    "NonInterface_Trans": 2438,
+    "NonInterface_Trans_Rate": 56.8,
+    "Odds_Ratio": 1.455
+  },
+  {
+    "AA": "PRO",
+    "Interface_Total": 309,
+    "Interface_Trans": 73,
+    "Interface_Trans_Rate": 23.62,
+    "NonInterface_Total": 2876,
+    "NonInterface_Trans": 507,
+    "NonInterface_Trans_Rate": 17.63,
+    "Odds_Ratio": 1.445
+  },
+  {
+    "AA": "LEU",
+    "Interface_Total": 375,
+    "Interface_Trans": 85,
+    "Interface_Trans_Rate": 22.67,
+    "NonInterface_Total": 5829,
+    "NonInterface_Trans": 1004,
+    "NonInterface_Trans_Rate": 17.22,
+    "Odds_Ratio": 1.409
+  },
+  {
+    "AA": "SER",
+    "Interface_Total": 489,
+    "Interface_Trans": 172,
+    "Interface_Trans_Rate": 35.17,
+    "NonInterface_Total": 3315,
+    "NonInterface_Trans": 951,
+    "NonInterface_Trans_Rate": 28.69,
+    "Odds_Ratio": 1.349
+  },
+  {
+    "AA": "CYS",
+    "Interface_Total": 78,
+    "Interface_Trans": 15,
+    "Interface_Trans_Rate": 19.23,
+    "NonInterface_Total": 749,
+    "NonInterface_Trans": 113,
+    "NonInterface_Trans_Rate": 15.09,
+    "Odds_Ratio": 1.34
+  },
+  {
+    "AA": "VAL",
+    "Interface_Total": 297,
+    "Interface_Trans": 70,
+    "Interface_Trans_Rate": 23.57,
+    "NonInterface_Total": 3833,
+    "NonInterface_Trans": 765,
+    "NonInterface_Trans_Rate": 19.96,
+    "Odds_Ratio": 1.237
+  },
+  {
+    "AA": "THR",
+    "Interface_Total": 390,
+    "Interface_Trans": 75,
+    "Interface_Trans_Rate": 19.23,
+    "NonInterface_Total": 2965,
+    "NonInterface_Trans": 620,
+    "NonInterface_Trans_Rate": 20.91,
+    "Odds_Ratio": 0.901
+  }
+]

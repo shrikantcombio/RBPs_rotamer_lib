@@ -1,0 +1,14 @@
+{
+  "Interface_Total": 6336,
+  "Interface_Changed": 2427,
+  "Interface_Same": 3909,
+  "Interface_Transition_Rate_Percent": 38.3,
+  "NonInterface_Total": 52107,
+  "NonInterface_Changed": 13642,
+  "NonInterface_Same": 38465,
+  "NonInterface_Transition_Rate_Percent": 26.18,
+  "Odds_Ratio": 1.7506,
+  "Fisher_p_value": 2.1064915144276883e-87,
+  "Chi2_stat": 415.9354,
+  "Chi2_p_value": 1.8713705163687893e-92
+}

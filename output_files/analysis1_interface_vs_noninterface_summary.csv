@@ -1,0 +1,2 @@
+Interface_Total,Interface_Changed,Interface_Same,Interface_Transition_Rate_Percent,NonInterface_Total,NonInterface_Changed,NonInterface_Same,NonInterface_Transition_Rate_Percent,Odds_Ratio,Fisher_p_value,Chi2_stat,Chi2_p_value
+6336,2427,3909,38.3,52107,13642,38465,26.18,1.7506,2.1064915144276883e-87,415.9354,1.8713705163687893e-92
