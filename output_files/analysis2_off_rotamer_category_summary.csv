@@ -1,0 +1,2 @@
+Interface_Total,Interface_OFF_to_ON_Count,Interface_OFF_to_ON_Percent,Interface_ON_to_OFF_Count,Interface_ON_to_OFF_Percent,Interface_ON_to_ON_Percent,Interface_OFF_to_OFF_Percent,NonInterface_Total,NonInterface_OFF_to_ON_Count,NonInterface_OFF_to_ON_Percent,NonInterface_ON_to_OFF_Count,NonInterface_ON_to_OFF_Percent,NonInterface_ON_to_ON_Percent,NonInterface_OFF_to_OFF_Percent,Fisher_Odds_Ratio,Fisher_p_value
+6336,138,2.18,100,1.58,92.71,3.54,52107,820,1.57,872,1.67,92.39,4.36,1.4675,0.006848525870021525

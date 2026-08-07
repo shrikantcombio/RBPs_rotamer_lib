@@ -1,0 +1,38 @@
+[
+  {
+    "TRANS_CAT": "OFF_to_ON",
+    "Interface_Count": 138,
+    "Interface_DeltaE_Mean": 0.069,
+    "Interface_DeltaE_Std": 0.928,
+    "NonInterface_Count": 820,
+    "NonInterface_DeltaE_Mean": 0.102,
+    "NonInterface_DeltaE_Std": 0.791
+  },
+  {
+    "TRANS_CAT": "ON_to_OFF",
+    "Interface_Count": 100,
+    "Interface_DeltaE_Mean": 0.036,
+    "Interface_DeltaE_Std": 1.145,
+    "NonInterface_Count": 872,
+    "NonInterface_DeltaE_Mean": -0.224,
+    "NonInterface_DeltaE_Std": 0.513
+  },
+  {
+    "TRANS_CAT": "ON_to_ON",
+    "Interface_Count": 5874,
+    "Interface_DeltaE_Mean": -0.006,
+    "Interface_DeltaE_Std": 0.767,
+    "NonInterface_Count": 48144,
+    "NonInterface_DeltaE_Mean": -0.001,
+    "NonInterface_DeltaE_Std": 0.678
+  },
+  {
+    "TRANS_CAT": "OFF_to_OFF",
+    "Interface_Count": 224,
+    "Interface_DeltaE_Mean": -0.004,
+    "Interface_DeltaE_Std": 0.268,
+    "NonInterface_Count": 2271,
+    "NonInterface_DeltaE_Mean": -0.003,
+    "NonInterface_DeltaE_Std": 0.276
+  }
+]

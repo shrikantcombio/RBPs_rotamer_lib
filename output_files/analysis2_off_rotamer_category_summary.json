@@ -1,0 +1,18 @@
+{
+  "Interface_Total": 6336,
+  "Interface_OFF_to_ON_Count": 138,
+  "Interface_OFF_to_ON_Percent": 2.18,
+  "Interface_ON_to_OFF_Count": 100,
+  "Interface_ON_to_OFF_Percent": 1.58,
+  "Interface_ON_to_ON_Percent": 92.71,
+  "Interface_OFF_to_OFF_Percent": 3.54,
+  "NonInterface_Total": 52107,
+  "NonInterface_OFF_to_ON_Count": 820,
+  "NonInterface_OFF_to_ON_Percent": 1.57,
+  "NonInterface_ON_to_OFF_Count": 872,
+  "NonInterface_ON_to_OFF_Percent": 1.67,
+  "NonInterface_ON_to_ON_Percent": 92.39,
+  "NonInterface_OFF_to_OFF_Percent": 4.36,
+  "Fisher_Odds_Ratio": 1.4675,
+  "Fisher_p_value": 0.006848525870021525
+}

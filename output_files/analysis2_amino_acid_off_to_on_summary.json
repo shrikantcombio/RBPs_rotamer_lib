@@ -1,0 +1,164 @@
+[
+  {
+    "AA": "PRO",
+    "Interface_Total": 309,
+    "Interface_OFF_to_ON_Count": 46,
+    "Interface_OFF_to_ON_Percent": 14.89,
+    "NonInterface_Total": 2876,
+    "NonInterface_OFF_to_ON_Count": 234,
+    "NonInterface_OFF_to_ON_Percent": 8.14
+  },
+  {
+    "AA": "MET",
+    "Interface_Total": 140,
+    "Interface_OFF_to_ON_Count": 12,
+    "Interface_OFF_to_ON_Percent": 8.57,
+    "NonInterface_Total": 1241,
+    "NonInterface_OFF_to_ON_Count": 10,
+    "NonInterface_OFF_to_ON_Percent": 0.81
+  },
+  {
+    "AA": "LEU",
+    "Interface_Total": 375,
+    "Interface_OFF_to_ON_Count": 18,
+    "Interface_OFF_to_ON_Percent": 4.8,
+    "NonInterface_Total": 5829,
+    "NonInterface_OFF_to_ON_Count": 219,
+    "NonInterface_OFF_to_ON_Percent": 3.76
+  },
+  {
+    "AA": "ARG",
+    "Interface_Total": 868,
+    "Interface_OFF_to_ON_Count": 27,
+    "Interface_OFF_to_ON_Percent": 3.11,
+    "NonInterface_Total": 3420,
+    "NonInterface_OFF_to_ON_Count": 52,
+    "NonInterface_OFF_to_ON_Percent": 1.52
+  },
+  {
+    "AA": "SER",
+    "Interface_Total": 489,
+    "Interface_OFF_to_ON_Count": 10,
+    "Interface_OFF_to_ON_Percent": 2.04,
+    "NonInterface_Total": 3315,
+    "NonInterface_OFF_to_ON_Count": 24,
+    "NonInterface_OFF_to_ON_Percent": 0.72
+  },
+  {
+    "AA": "GLU",
+    "Interface_Total": 354,
+    "Interface_OFF_to_ON_Count": 7,
+    "Interface_OFF_to_ON_Percent": 1.98,
+    "NonInterface_Total": 4826,
+    "NonInterface_OFF_to_ON_Count": 43,
+    "NonInterface_OFF_to_ON_Percent": 0.89
+  },
+  {
+    "AA": "ASP",
+    "Interface_Total": 357,
+    "Interface_OFF_to_ON_Count": 7,
+    "Interface_OFF_to_ON_Percent": 1.96,
+    "NonInterface_Total": 3603,
+    "NonInterface_OFF_to_ON_Count": 23,
+    "NonInterface_OFF_to_ON_Percent": 0.64
+  },
+  {
+    "AA": "ILE",
+    "Interface_Total": 301,
+    "Interface_OFF_to_ON_Count": 3,
+    "Interface_OFF_to_ON_Percent": 1.0,
+    "NonInterface_Total": 3534,
+    "NonInterface_OFF_to_ON_Count": 12,
+    "NonInterface_OFF_to_ON_Percent": 0.34
+  },
+  {
+    "AA": "PHE",
+    "Interface_Total": 292,
+    "Interface_OFF_to_ON_Count": 2,
+    "Interface_OFF_to_ON_Percent": 0.68,
+    "NonInterface_Total": 2505,
+    "NonInterface_OFF_to_ON_Count": 7,
+    "NonInterface_OFF_to_ON_Percent": 0.28
+  },
+  {
+    "AA": "VAL",
+    "Interface_Total": 297,
+    "Interface_OFF_to_ON_Count": 2,
+    "Interface_OFF_to_ON_Percent": 0.67,
+    "NonInterface_Total": 3833,
+    "NonInterface_OFF_to_ON_Count": 4,
+    "NonInterface_OFF_to_ON_Percent": 0.1
+  },
+  {
+    "AA": "ASN",
+    "Interface_Total": 393,
+    "Interface_OFF_to_ON_Count": 2,
+    "Interface_OFF_to_ON_Percent": 0.51,
+    "NonInterface_Total": 2557,
+    "NonInterface_OFF_to_ON_Count": 40,
+    "NonInterface_OFF_to_ON_Percent": 1.56
+  },
+  {
+    "AA": "LYS",
+    "Interface_Total": 743,
+    "Interface_OFF_to_ON_Count": 2,
+    "Interface_OFF_to_ON_Percent": 0.27,
+    "NonInterface_Total": 4292,
+    "NonInterface_OFF_to_ON_Count": 93,
+    "NonInterface_OFF_to_ON_Percent": 2.17
+  },
+  {
+    "AA": "CYS",
+    "Interface_Total": 78,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 749,
+    "NonInterface_OFF_to_ON_Count": 0,
+    "NonInterface_OFF_to_ON_Percent": 0.0
+  },
+  {
+    "AA": "GLN",
+    "Interface_Total": 302,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 2231,
+    "NonInterface_OFF_to_ON_Count": 34,
+    "NonInterface_OFF_to_ON_Percent": 1.52
+  },
+  {
+    "AA": "HIS",
+    "Interface_Total": 249,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 1383,
+    "NonInterface_OFF_to_ON_Count": 0,
+    "NonInterface_OFF_to_ON_Percent": 0.0
+  },
+  {
+    "AA": "THR",
+    "Interface_Total": 390,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 2965,
+    "NonInterface_OFF_to_ON_Count": 17,
+    "NonInterface_OFF_to_ON_Percent": 0.57
+  },
+  {
+    "AA": "TRP",
+    "Interface_Total": 68,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 728,
+    "NonInterface_OFF_to_ON_Count": 4,
+    "NonInterface_OFF_to_ON_Percent": 0.55
+  },
+  {
+    "AA": "TYR",
+    "Interface_Total": 331,
+    "Interface_OFF_to_ON_Count": 0,
+    "Interface_OFF_to_ON_Percent": 0.0,
+    "NonInterface_Total": 2220,
+    "NonInterface_OFF_to_ON_Count": 4,
+    "NonInterface_OFF_to_ON_Percent": 0.18
+  }
+]
