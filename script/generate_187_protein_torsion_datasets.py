@@ -5,10 +5,10 @@ generate_187_protein_torsion_datasets.py
 Calculates complete protein torsion angle datasets (B_PHI, B_PSI, B_OMEGA, B_CHI1-5, B_SS,
 U_PHI, U_PSI, U_OMEGA, U_CHI1-5, U_SS, SASA) for all 187 PRDBv3 protein-RNA complexes.
 
-Uses:
-  - Input complex list: /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/input_files/PRDBv3_pdbList_chains.json
-  - Pre-extracted 187 bound/unbound equal structure PDBs & RSA files: /home/labuser/my_work/protein_rotamer/RBPs_rotamer_data/PRDBv3_rotamer/
-  - High-precision IUPAC dihedral calculations & DSSP: rota_assign/macromol_torsion/
+SASA Classification:
+  - 'I': Interface residues (buried upon complexation, from PRince .int)
+  - 'N': Non-interface surface residues (surface exposed outside binding interface, from PRince .sur)
+  - 'C': Core buried residues (interior residues without surface exposure)
 
 Outputs:
   - CSV: /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/output_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.csv
@@ -30,11 +30,6 @@ ROTA_ASSIGN_DIR = SCRIPT_DIR / "rota_assign"
 if str(ROTA_ASSIGN_DIR) not in sys.path:
     sys.path.insert(0, str(ROTA_ASSIGN_DIR))
 
-OLD_SCRIPTS_DIR = Path("/home/labuser/my_work/protein_rotamer/RBPs_rotamer_data/scripts_protein")
-if str(OLD_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(OLD_SCRIPTS_DIR))
-
-import positionalFilter
 from macromol_torsion.protein_backbone import ProteinBackboneCalculator
 from macromol_torsion.protein_sidechain import ProteinSidechainCalculator
 from macromol_torsion.dssp import DsspAnalyzer
@@ -47,6 +42,37 @@ INPUT_FILES_DIR = SCRIPT_DIR / "RBPs_rotamer_lib" / "input_files"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 INPUT_FILES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def parse_res_tuples(fpath):
+    """Parses PDB/INT/SUR file to extract set of (chain, resSeq, resName) and (chain, resSeq) tuples."""
+    f_p = Path(fpath)
+    if not f_p.exists():
+        return set()
+
+    tuples = set()
+    with open(f_p, "r") as f:
+        for line in f:
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                chain = line[21:22].strip()
+                seq = line[22:26].strip()
+                res_name = line[17:20].strip()
+                tuples.add((chain, seq, res_name))
+                tuples.add((chain, seq))
+    return tuples
+
+
+def find_prince_file(c_pdb, u_pdb, ext):
+    candidates = [
+        DATASET_DIR / f"{c_pdb}P.{ext}",
+        DATASET_DIR / f"{c_pdb}C.{ext}",
+        DATASET_DIR / f"{c_pdb}.{ext}",
+        DATASET_DIR / f"{c_pdb}_{u_pdb}_C.{ext}"
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
 
 
 def calculate_187_dataset():
@@ -76,21 +102,27 @@ def calculate_187_dataset():
             continue
 
         processed_count += 1
-        logging.info(f"[{processed_count}/187] Processing Pair: {bound_pdb}_{unbound_pdb} (Chain: {pro_chain})...")
 
-        # 1. Parse Atoms using clean parser
+        # 1. Interface & Surface residue lookup from PRince .int and .sur files
+        int_file = find_prince_file(bound_pdb, unbound_pdb, "int")
+        sur_file = find_prince_file(bound_pdb, unbound_pdb, "sur")
+
+        int_tuples = parse_res_tuples(int_file)
+        sur_tuples = parse_res_tuples(sur_file)
+
+        # 2. Parse Atoms using clean parser
         b_atoms = StructureReader.parse_structure(c_file)
         u_atoms = StructureReader.parse_structure(u_file)
 
-        # 2. DSSP Secondary Structure
+        # 3. DSSP Secondary Structure
         b_ss_map = dssp.get_secondary_structure(c_file)
         u_ss_map = dssp.get_secondary_structure(u_file)
 
-        # 3. Backbone Dihedrals
+        # 4. Backbone Dihedrals
         b_phi, b_psi, b_omega, _, _, b_labels = bb_calc.calculate_dihedrals(b_atoms)
         u_phi, u_psi, u_omega, _, _, u_labels = bb_calc.calculate_dihedrals(u_atoms)
 
-        # 4. Sidechain Dihedrals
+        # 5. Sidechain Dihedrals
         b_chis = sc_calc.calculate_all_chis(b_atoms)
         u_chis = sc_calc.calculate_all_chis(u_atoms)
 
@@ -115,27 +147,6 @@ def calculate_187_dataset():
                     "PHI": u_phi[i], "PSI": u_psi[i], "OMEGA": u_omega[i],
                     "SS": u_ss_map.get(lbl, "L")
                 }
-
-        # 5. Interface & Non-interface SASA classification
-        rsa_c = DATASET_DIR / f"{bound_pdb}C.rsa"
-        rsa_p = DATASET_DIR / f"{bound_pdb}P.rsa"
-        if not rsa_c.exists():
-            rsa_c = DATASET_DIR / f"{bound_pdb}.rsa"
-        if not rsa_p.exists():
-            rsa_p = DATASET_DIR / f"{bound_pdb}a.rsa"
-
-        interface_keys = set()
-        if rsa_c.exists() and rsa_p.exists():
-            with open(rsa_c, "r") as f_c:
-                b_lines = f_c.readlines()
-            with open(rsa_p, "r") as f_p:
-                u_lines = f_p.readlines()
-
-            interface_list = positionalFilter.getInterface(b_lines, pro_chain, u_lines)
-            for k in interface_list:
-                parts = k.split()
-                if len(parts) >= 3:
-                    interface_keys.add((parts[0], parts[1], parts[2]))
 
         # 6. Build combined residue records
         for lbl, b_info in b_bb_map.items():
@@ -165,8 +176,19 @@ def calculate_187_dataset():
                 u_ss_val = b_info["SS"]
                 u_c1, u_c2, u_c3, u_c4, u_c5 = 0.0, 0.0, 0.0, 0.0, 0.0
 
-            # SASA label: 'I' if in interface_keys, else 'N'
-            sasa_val = "I" if (res_name, chain, seq) in interface_keys else "N"
+            # SASA classification logic:
+            # - 'I': Interface (in .int)
+            # - 'N': Non-interface Surface (in .sur but not in .int)
+            # - 'C': Core buried (not in .sur)
+            is_int = (chain, seq, res_name) in int_tuples or (chain, seq) in int_tuples
+            is_sur = (chain, seq, res_name) in sur_tuples or (chain, seq) in sur_tuples
+
+            if is_int:
+                sasa_val = "I"
+            elif is_sur:
+                sasa_val = "N"
+            else:
+                sasa_val = "C"
 
             record = {
                 "PDB": bound_pdb,
