@@ -38,18 +38,25 @@ The rotamer library derivation pipeline incorporates modern circular statistics 
 - Built on `macromol_torsion` (`geometry.py`, `protein_backbone.py`, `protein_sidechain.py`).
 - Enforces strict **IUPAC right-handed sign convention** ($\pm 180^\circ$) matching BioPython `calc_dihedral` with 100.00% precision.
 - Assigns 3-state secondary structure via DSSP (`get_secondary_structure`).
-- Tags interface (`I`) vs non-interface (`N`) residues based on solvent accessible surface area (SASA) burial using PRince/NACCESS.
 
-### 2. Depth-Valid Sample Masking & Symmetry Folding
+### 2. SASA & Spatial Residue Classification Logic
+Residues are categorized based on surface accessibility and interface burial using PRince (`.int` and `.sur` outputs):
+- **Interface Residues (`'I'`)**: Residues present in PRince `.int` output files that lose solvent accessible surface area (SASA) upon complexation (buried in the binding interface).
+- **Non-Interface Surface Residues (`'N'`)**: Residues present in PRince `.sur` output files (surface-exposed residues) that are *not* involved in the binding interface.
+- **Core Buried Residues (`'C'`)**: Interior buried residues with zero surface accessibility (absent from both `.int` and `.sur` files).
+- **Surface Population (`'S'`)**: All surface-exposed residues combined ($\text{Surface } S = \text{Interface } I + \text{Non-Interface } N$, derived by filtering `SASA.isin(["I", "N", "S"])`).
+- **Overall Population (`'ALL'`)**: Complete dataset combining Interface, Non-Interface Surface, and Core Interior residues ($I + N + C$).
+
+### 3. Depth-Valid Sample Masking & Symmetry Folding
 - **Multi-Chi Depth Validation**: Residues with missing terminal atoms are validated up to their deepest non-null chi depth, ensuring partial sidechains contribute accurately without introducing `NaN` binning artifacts.
 - **Symmetric Planar Ring Folding**: Symmetric terminal chi angles ($\text{ASP }\chi_2$, $\text{GLU }\chi_3$, $\text{PHE }\chi_2$, $\text{TYR }\chi_2$) are folded into $[ -90^\circ, 90^\circ )$ prior to rotamer binning to avoid splitting chemically identical conformations into separate states.
 
-### 3. Von Mises Kernel-Weighted Circular Statistics
+### 4. Von Mises Kernel-Weighted Circular Statistics
 - **Grid Binning**: Backbone $(\Phi, \Psi)$ angles are binned into $30^\circ \times 30^\circ$ grid cells centered at $[-180^\circ, -150^\circ, \dots, +150^\circ]$.
 - **Rotamer States**: Sidechain $\chi$ angles are binned into standard staggered states ($p / g^+$ at $+60^\circ$, $t$ at $180^\circ$, $m / g^-$ at $-60^\circ$).
 - **Circular Statistics**: Weighted circular mean ($\mu = \text{angle}(\sum w_i e^{j\theta_i})$) and circular standard deviation ($\sigma$) are calculated using `scipy.stats.vonmises` fitting, eliminating artificial $-180^\circ / +180^\circ$ boundary discontinuities.
 
-### 4. Unified Multi-Format Library Outputs
+### 5. Unified Multi-Format Library Outputs
 - All rotamer libraries are exported in unified **CSV**, **TSV**, and **JSON** files combining all 18 standard sidechain amino acids for each state and surface classification.
 
 ---
