@@ -60,20 +60,56 @@ class BackboneDependentRotamerLibrary:
         "VAL": 1,
     }
 
-    def __init__(self, bb_sep=30, rot_bin_lib=None):
+    # Residues with symmetric terminal chi angles (180° periodicity).
+    # Key: residue name -> 0-based index of the symmetric chi.
+    # ASP/GLU: carboxylate (OD1/OD2 or OE1/OE2): chi2 for ASP (idx 1), chi3 for GLU (idx 2).
+    # PHE/TYR: aromatic ring, chi2 (idx 1). TRP is asymmetric (indole), excluded.
+    SYMMETRIC_CHI = {
+        "ASP": 1,
+        "GLU": 2,
+        "PHE": 1,
+        "TYR": 1,
+    }
+
+    def __init__(self, bb_sep=30, rot_bin_lib=None, min_count=5):
         """
         Initialize the rotamer library generator.
 
         Parameters:
         -----------
         bb_sep : int
-            Backbone angle separation bin size in degrees (default: 30°).
+            Backbone angle separation bin size in degrees (default: 30).
         rot_bin_lib : dict, optional
             Custom rotamer binning rules mapping (residue, chi_idx) to number of splits.
+        min_count : int
+            Minimum observations for a (backbone_bin x rotamer_bin) cell to be reported.
+            Default 5. Cells below this threshold produce unreliable probability estimates.
+            Use 1 only for exploratory/diagnostic analysis.
         """
         self.bb_sep = bb_sep
         self.rot_bin_lib = rot_bin_lib if rot_bin_lib is not None else {("PTR", 1): 4, ("ALY", 4): 6}
+        self.min_count = min_count
         self.results_cache = {}
+
+    @staticmethod
+    def fold_symmetric_chi(angle):
+        """
+        Canonicalize a symmetric terminal chi angle into [-90, 90) to avoid
+        double-counting chemically equivalent conformations.
+
+        Applies to the terminal chi of ASP (chi2), GLU (chi3), PHE (chi2), TYR (chi2),
+        where swapping the two equivalent heavy atoms (e.g. OD1<->OD2) adds exactly 180.
+        Without folding, physically identical rotamers separated by 180 get counted as
+        distinct states, inflating apparent diversity and distorting bin probabilities.
+
+        Convention: map to [-90, 90) by adding/subtracting 180 as needed.
+        Matches Dunbrack 2011 and Richardson/MolProbity conventions.
+        """
+        if angle >= 90.0:
+            return angle - 180.0
+        if angle < -90.0:
+            return angle + 180.0
+        return angle
 
     @staticmethod
     def rotameric_class(angle, n_splits=3):
@@ -192,12 +228,38 @@ class BackboneDependentRotamerLibrary:
             logging.warning(f"Missing columns {missing_cols} in dataset for residue {aa}.")
             return []
 
-        # 1. Classify sidechain chi angles into discrete rotamer bins
+        # 1. Build per-depth valid masks: a residue is valid at depth n only if
+        #    chi_1 through chi_n are ALL non-null (first NaN is a hard stop).
+        #    This ensures a residue with missing terminal chi does not contribute
+        #    NaN-derived bin assignments at any depth, but still contributes to
+        #    shallower depths where its data is real.
+        depth_valid_mask = np.ones(len(data), dtype=bool)  # cumulative: valid up to depth n
+        valid_masks = []
+        for n in range(nchi):
+            depth_valid_mask = depth_valid_mask & data[chi_cols[n]].notna().values
+            valid_masks.append(depth_valid_mask.copy())
+
+        # Use deepest valid depth (all chi valid) as the working population for
+        # rotamer-state classification. Shallower populations used only for
+        # per-depth circular statistics below.
+        full_valid_mask = valid_masks[-1]  # all chi non-null
+        data_full = data[full_valid_mask]
+
+        # 1b. Classify sidechain chi angles into discrete rotamer bins
+        #     (only on residues where ALL chi are valid).
+        #     For residues with symmetric terminal chi (ASP/GLU/PHE/TYR), fold the
+        #     terminal chi into [-90, 90) before binning to avoid treating chemically
+        #     equivalent conformations as distinct rotamer states.
+        sym_chi_idx = self.SYMMETRIC_CHI.get(aa, None)
         chi_classes = []
         for n in range(nchi):
             col = chi_cols[n]
             n_splits = self.rot_bin_lib.get((aa, n), 3)
-            chi_classes.append(data[col].apply(lambda x: self.rotameric_class(x, n_splits)).values)
+            if sym_chi_idx is not None and n == sym_chi_idx:
+                angles = data_full[col].apply(self.fold_symmetric_chi)
+            else:
+                angles = data_full[col]
+            chi_classes.append(angles.apply(lambda x: self.rotameric_class(x, n_splits)).values)
 
         effect_chi_classes = np.array(chi_classes)
         if last_free_rot and nchi > 1:
@@ -205,13 +267,14 @@ class BackboneDependentRotamerLibrary:
             effect_chi_classes = effect_chi_classes[:-1]
 
         # 2. Classify backbone phi, psi angles into closest grid points
+        #    (on full valid population only)
         bb_classes = []
         for ang in [phi_col, psi_col]:
-            bb_classes.append(data[ang].apply(lambda x: self.get_closest_angle(x, self.bb_sep)).values)
+            bb_classes.append(data_full[ang].apply(lambda x: self.get_closest_angle(x, self.bb_sep)).values)
         bb_classes = np.array(bb_classes)
 
         results = []
-        if bb_classes.size == 0:
+        if bb_classes.size == 0 or effect_chi_classes.size == 0:
             return results
 
         # 3. Loop through unique backbone (phi, psi) bins
@@ -221,11 +284,7 @@ class BackboneDependentRotamerLibrary:
             bb_mask = (bb_classes[0] == b[0]) & (bb_classes[1] == b[1])
             total_bb_count = int(np.sum(bb_mask))
 
-            if total_bb_count <= 1:
-                continue
-
-            # Loop through unique rotamer state combinations present in this backbone bin
-            if effect_chi_classes.size == 0:
+            if total_bb_count < self.min_count:
                 continue
 
             unique_rot_states = np.unique(effect_chi_classes[:, bb_mask].T, axis=0)
@@ -236,14 +295,13 @@ class BackboneDependentRotamerLibrary:
                     mask &= (effect_chi_classes[i] == l)
 
                 count_each = int(np.sum(mask))
-
-                if count_each <= 1:
+                if count_each < self.min_count:
                     continue
 
                 prob = float(count_each) / float(total_bb_count)
-                angles_sub = data[mask]
+                angles_sub = data_full[mask]
 
-                # Output array format: phi, psi, count_each, count_tot, prob, chi1..n_mean, chi1..n_std
+                # Output array: phi, psi, count_each, count_tot, prob, chi1..n_mean, chi1..n_std
                 line = np.zeros(2 * nchi + 5)
                 line[0] = int(b[0])
                 line[1] = int(b[1])
@@ -253,7 +311,12 @@ class BackboneDependentRotamerLibrary:
 
                 for n in range(nchi):
                     chi_col_name = chi_cols[n]
-                    ang_rad = np.radians(angles_sub[chi_col_name].values)
+                    raw_angles = angles_sub[chi_col_name].values
+                    # Fold symmetric terminal chi before computing circular statistics
+                    # so the reported mean angle is in the canonical [-90, 90) range.
+                    if sym_chi_idx is not None and n == sym_chi_idx:
+                        raw_angles = np.array([self.fold_symmetric_chi(a) for a in raw_angles])
+                    ang_rad = np.radians(raw_angles)
 
                     try:
                         kappa, loc, _ = vonmises.fit(ang_rad, fscale=1)
@@ -295,7 +358,10 @@ class BackboneDependentRotamerLibrary:
 
         df_work = df.copy()
         if sasa_filter:
-            df_work = df_work[df_work["SASA"].astype(str).str.startswith(sasa_filter)]
+            if sasa_filter == "S":
+                df_work = df_work[df_work["SASA"].astype(str).isin(["I", "N", "S"])]
+            else:
+                df_work = df_work[df_work["SASA"].astype(str).str.startswith(sasa_filter)]
 
         lib_dict = {}
         for aa in residues:
