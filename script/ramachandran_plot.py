@@ -136,6 +136,22 @@ class RamachandranPlot:
         phi = float(phi)
         psi = float(psi)
 
+        # Glycine specific contours (checked first)
+        if rama_type == "Glycine":
+            if (30 <= phi <= 100 and -80 <= psi <= 10) or (-100 <= phi <= -30 and 10 <= psi <= 80):
+                return "Favored"
+            if (-180 <= phi <= 180 and -180 <= psi <= 180):
+                return "Allowed"
+            return "Outlier"
+
+        # Proline restricted phi around -65
+        if rama_type == "Proline":
+            if -100 <= phi <= -40 and (-80 <= psi <= 40 or 90 <= psi <= 180):
+                return "Favored"
+            if -120 <= phi <= -20 and -100 <= psi <= 180:
+                return "Allowed"
+            return "Outlier"
+
         # General / Pre-Pro Favored
         if (-100 <= phi <= -30 and -80 <= psi <= -10) or \
            (-180 <= phi <= -45 and (90 <= psi <= 180 or -180 <= psi <= -150)) or \
@@ -147,18 +163,6 @@ class RamachandranPlot:
            (-180 <= phi <= -30 and (60 <= psi <= 180 or -180 <= psi <= -120)) or \
            (20 <= phi <= 120 and -10 <= psi <= 100):
             return "Allowed"
-
-        # Glycine has broader allowed regions
-        if rama_type == "Glycine":
-            if (30 <= phi <= 100 and -80 <= psi <= 10) or (-100 <= phi <= -30 and 10 <= psi <= 80):
-                return "Favored"
-            if (-180 <= phi <= 180 and -180 <= psi <= 180):
-                return "Allowed"
-
-        # Proline restricted phi around -65
-        if rama_type == "Proline":
-            if -100 <= phi <= -40 and (-80 <= psi <= 40 or 90 <= psi <= 180):
-                return "Favored"
 
         return "Outlier"
 
@@ -200,7 +204,14 @@ class RamachandranPlot:
                 residues[res_key] = {}
             residues[res_key][str(atom_name)] = coord
 
-        res_keys = list(residues.keys())
+        def _sort_key(k):
+            try:
+                num = int(k[1])
+            except ValueError:
+                num = 0
+            return (str(k[0]), num, str(k[2]))
+
+        res_keys = sorted(residues.keys(), key=_sort_key)
         for idx in range(1, len(res_keys) - 1):
             prev_key = res_keys[idx - 1]
             curr_key = res_keys[idx]

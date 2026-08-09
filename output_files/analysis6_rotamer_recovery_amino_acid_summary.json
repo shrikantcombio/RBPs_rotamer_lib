@@ -1,128 +1,164 @@
 [
   {
     "AA": "TRP",
-    "Interface_Total": 68,
-    "RBP_Library_Accuracy_Percent": 97.06,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 97.06
-  },
-  {
-    "AA": "PRO",
-    "Interface_Total": 309,
-    "RBP_Library_Accuracy_Percent": 96.44,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 96.44
+    "Total_Residues": 32,
+    "RBP_Library_Accuracy_Percent": 100.0,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 100.0,
+    "McNemar_p_value": 4.2513944082491124e-08,
+    "FDR_p_adj": 4.2513944082491124e-08
   },
   {
     "AA": "CYS",
-    "Interface_Total": 78,
-    "RBP_Library_Accuracy_Percent": 94.87,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 94.87
+    "Total_Residues": 69,
+    "RBP_Library_Accuracy_Percent": 100.0,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 100.0,
+    "McNemar_p_value": 2.6951846369655923e-16,
+    "FDR_p_adj": 3.0320827165862913e-16
   },
   {
-    "AA": "TYR",
-    "Interface_Total": 331,
-    "RBP_Library_Accuracy_Percent": 94.26,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 94.26
-  },
-  {
-    "AA": "PHE",
-    "Interface_Total": 292,
-    "RBP_Library_Accuracy_Percent": 91.78,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 91.78
+    "AA": "PRO",
+    "Total_Residues": 320,
+    "RBP_Library_Accuracy_Percent": 99.06,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 99.06,
+    "McNemar_p_value": 1.77561489157636e-70,
+    "FDR_p_adj": 3.99513350604681e-70
   },
   {
     "AA": "ILE",
-    "Interface_Total": 301,
-    "RBP_Library_Accuracy_Percent": 91.03,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 91.03
+    "Total_Residues": 303,
+    "RBP_Library_Accuracy_Percent": 97.36,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 97.36,
+    "McNemar_p_value": 1.1019357426556582e-65,
+    "FDR_p_adj": 1.9834843367801846e-65
+  },
+  {
+    "AA": "PHE",
+    "Total_Residues": 289,
+    "RBP_Library_Accuracy_Percent": 95.85,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 95.85,
+    "McNemar_p_value": 9.213625391228448e-62,
+    "FDR_p_adj": 1.5076841549282915e-61
   },
   {
     "AA": "HIS",
-    "Interface_Total": 249,
-    "RBP_Library_Accuracy_Percent": 88.76,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 88.76
+    "Total_Residues": 234,
+    "RBP_Library_Accuracy_Percent": 93.59,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 93.59,
+    "McNemar_p_value": 4.071777446628031e-49,
+    "FDR_p_adj": 4.8861329359536375e-49
   },
   {
-    "AA": "MET",
-    "Interface_Total": 140,
-    "RBP_Library_Accuracy_Percent": 87.14,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 87.14
-  },
-  {
-    "AA": "ASP",
-    "Interface_Total": 357,
-    "RBP_Library_Accuracy_Percent": 87.11,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 87.11
-  },
-  {
-    "AA": "THR",
-    "Interface_Total": 390,
-    "RBP_Library_Accuracy_Percent": 86.15,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 86.15
-  },
-  {
-    "AA": "LEU",
-    "Interface_Total": 375,
-    "RBP_Library_Accuracy_Percent": 84.0,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 84.0
+    "AA": "TYR",
+    "Total_Residues": 336,
+    "RBP_Library_Accuracy_Percent": 93.45,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 93.45,
+    "McNemar_p_value": 7.995559233477854e-70,
+    "FDR_p_adj": 1.5991118466955708e-69
   },
   {
     "AA": "ASN",
-    "Interface_Total": 393,
-    "RBP_Library_Accuracy_Percent": 82.7,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 82.7
+    "Total_Residues": 388,
+    "RBP_Library_Accuracy_Percent": 92.53,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 92.53,
+    "McNemar_p_value": 1.2653954665413326e-79,
+    "FDR_p_adj": 7.592372799247996e-79
+  },
+  {
+    "AA": "ASP",
+    "Total_Residues": 351,
+    "RBP_Library_Accuracy_Percent": 90.88,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 90.88,
+    "McNemar_p_value": 6.511676674034833e-71,
+    "FDR_p_adj": 1.6744311447518142e-70
+  },
+  {
+    "AA": "THR",
+    "Total_Residues": 395,
+    "RBP_Library_Accuracy_Percent": 90.13,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 90.13,
+    "McNemar_p_value": 5.694887917411111e-79,
+    "FDR_p_adj": 2.562699562835e-78
   },
   {
     "AA": "VAL",
-    "Interface_Total": 297,
-    "RBP_Library_Accuracy_Percent": 81.14,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 81.14
+    "Total_Residues": 307,
+    "RBP_Library_Accuracy_Percent": 88.27,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 88.27,
+    "McNemar_p_value": 1.8709066812117603e-60,
+    "FDR_p_adj": 2.8063600218176403e-60
   },
   {
-    "AA": "SER",
-    "Interface_Total": 489,
-    "RBP_Library_Accuracy_Percent": 74.85,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 74.85
+    "AA": "LEU",
+    "Total_Residues": 385,
+    "RBP_Library_Accuracy_Percent": 87.01,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 87.01,
+    "McNemar_p_value": 2.131778283113546e-74,
+    "FDR_p_adj": 6.395334849340638e-74
   },
   {
     "AA": "GLN",
-    "Interface_Total": 302,
-    "RBP_Library_Accuracy_Percent": 72.85,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 72.85
+    "Total_Residues": 302,
+    "RBP_Library_Accuracy_Percent": 75.17,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 75.17,
+    "McNemar_p_value": 7.325707447382558e-51,
+    "FDR_p_adj": 9.418766718063289e-51
+  },
+  {
+    "AA": "MET",
+    "Total_Residues": 76,
+    "RBP_Library_Accuracy_Percent": 73.68,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 73.68,
+    "McNemar_p_value": 1.9867575986578073e-13,
+    "FDR_p_adj": 2.1036256926965019e-13
   },
   {
     "AA": "GLU",
-    "Interface_Total": 354,
-    "RBP_Library_Accuracy_Percent": 64.97,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 64.97
-  },
-  {
-    "AA": "LYS",
-    "Interface_Total": 743,
-    "RBP_Library_Accuracy_Percent": 55.05,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 55.05
+    "Total_Residues": 354,
+    "RBP_Library_Accuracy_Percent": 70.9,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 70.9,
+    "McNemar_p_value": 4.281360867662168e-56,
+    "FDR_p_adj": 5.928038124455309e-56
   },
   {
     "AA": "ARG",
-    "Interface_Total": 868,
-    "RBP_Library_Accuracy_Percent": 49.19,
-    "PPI_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 49.19
+    "Total_Residues": 845,
+    "RBP_Library_Accuracy_Percent": 70.53,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 70.53,
+    "McNemar_p_value": 3.3767015549852665e-131,
+    "FDR_p_adj": 6.07806279897348e-130
+  },
+  {
+    "AA": "SER",
+    "Total_Residues": 490,
+    "RBP_Library_Accuracy_Percent": 69.8,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 69.8,
+    "McNemar_p_value": 6.371384451152034e-76,
+    "FDR_p_adj": 2.293698402414732e-75
+  },
+  {
+    "AA": "LYS",
+    "Total_Residues": 724,
+    "RBP_Library_Accuracy_Percent": 65.06,
+    "General_SSD_Library_Accuracy_Percent": 0.0,
+    "Accuracy_Gain_Percent": 65.06,
+    "McNemar_p_value": 5.2834123173018225e-104,
+    "FDR_p_adj": 4.75507108557164e-103
   }
 ]

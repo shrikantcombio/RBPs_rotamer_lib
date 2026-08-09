@@ -90,26 +90,21 @@ class RBPRotamerDistributionPlotter:
             return "m"
         return None
 
-    def calculate_rotamer_tables_from_tsv(self, tsv_file=None, output_excel=None):
+    def calculate_rotamer_tables_from_json(self, json_file=None, output_excel=None):
         """
         Calculate rotamer state counts and percentage distributions directly from
-        raw torsion angle TSV file (PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv).
+        raw torsion angle JSON file (ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json).
         Recreates all sheets for Figure_2_Tabulated_187.xlsx.
         """
-        tsv_path = Path(tsv_file) if tsv_file else DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-        if not tsv_path.exists():
-            tsv_path = DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-
-        if not tsv_path.exists():
-            logging.error(f"Raw dataset TSV file not found: {tsv_path}")
+        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json"
+        if not json_path.exists():
+            logging.error(f"Raw dataset JSON file not found: {json_path}")
             return None
 
         try:
-            df = pd.read_csv(tsv_path, sep=",")
-            if "LABEL" not in df.columns:
-                df = pd.read_csv(tsv_path, sep="\t")
+            df = pd.read_json(json_path)
         except Exception:
-            df = pd.read_csv(tsv_path, sep="\t")
+            df = pd.read_json(json_path)
 
         df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
 
@@ -370,7 +365,7 @@ class RBPRotamerDistributionPlotter:
 
     def plot_chi1_chi2_heatmap(
         self,
-        tsv_file=None,
+        json_file=None,
         state="B",
         save_path=None,
         figures_dir=FIGURES_DIR,
@@ -390,20 +385,20 @@ class RBPRotamerDistributionPlotter:
         """
         import matplotlib.gridspec as gridspec
 
-        tsv_path = Path(tsv_file) if tsv_file else DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-        if not tsv_path.exists():
-            tsv_path = DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json"
+        if not json_path.exists():
+            json_path = DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
 
-        if not tsv_path.exists():
-            logging.error(f"Raw dataset TSV file not found: {tsv_path}")
+        if not json_path.exists():
+            logging.error(f"Raw dataset TSV file not found: {json_path}")
             return
 
         try:
-            df = pd.read_csv(tsv_path, sep=",")
+            df = pd.read_json(json_path)
             if "LABEL" not in df.columns:
-                df = pd.read_csv(tsv_path, sep="\t")
+                df = pd.read_json(json_path)
         except Exception:
-            df = pd.read_csv(tsv_path, sep="\t")
+            df = pd.read_json(json_path)
 
         df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
 

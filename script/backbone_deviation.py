@@ -33,56 +33,121 @@ CHI_RESIDUES = {
 SASA_TYPES = ["I", "N"]
 
 
-def normalize_delta_angles(angles):
-    """Normalize angular difference to range [-180, 180] degrees."""
-    return ((np.array(angles) + 180) % 360) - 180
+def circ_diff(b, u):
+    """Computes signed shortest circular difference in degrees in [-180, 180]."""
+    diff_rad = np.radians(np.asarray(b, dtype=float)) - np.radians(np.asarray(u, dtype=float))
+    return np.degrees(np.arctan2(np.sin(diff_rad), np.cos(diff_rad)))
 
 
 def calculate_delta_angles(df_torsion):
-    """Calculate normalized delta angles for backbone and side-chains."""
-    delta_phi = normalize_delta_angles(df_torsion["B_PHI"] - df_torsion["U_PHI"])
-    delta_psi = normalize_delta_angles(df_torsion["B_PSI"] - df_torsion["U_PSI"])
-    delta_phi_psi = (delta_phi + delta_psi) / 2.0
+    """
+    Calculate normalized delta angles for backbone and side-chains.
+    Filters out sentinel zero backbone values (U_PHI/U_PSI == 0.0) and uses RMS backbone deviation.
+    """
+    # Filter sentinel zeros and missing values in backbone dihedrals
+    mask = (
+        df_torsion["U_PHI"].notna() & (df_torsion["U_PHI"].astype(float) != 0.0) &
+        df_torsion["U_PSI"].notna() & (df_torsion["U_PSI"].astype(float) != 0.0) &
+        df_torsion["B_PHI"].notna() & (df_torsion["B_PHI"].astype(float) != 0.0) &
+        df_torsion["B_PSI"].notna() & (df_torsion["B_PSI"].astype(float) != 0.0)
+    )
+    df = df_torsion[mask].copy()
+
+    delta_phi = circ_diff(df["B_PHI"], df["U_PHI"])
+    delta_psi = circ_diff(df["B_PSI"], df["U_PSI"])
+
+    # RMS Backbone deviation: captures total magnitude regardless of sign cancellation
+    delta_phi_psi = np.sqrt((delta_phi**2 + delta_psi**2) / 2.0)
+
+    label_col = 'LABEL' if 'LABEL' in df.columns else ('D_LABEL' if 'D_LABEL' in df.columns else 'AA')
 
     dict_delta = {
-        "PDB": df_torsion["PDB"],
-        "D_LABEL": df_torsion["LABEL"],
+        "PDB": df["PDB"] if "PDB" in df.columns else df.index,
+        "D_LABEL": df[label_col],
         "D_PHI_PSI": delta_phi_psi,
         "D_PHI": delta_phi,
         "D_PSI": delta_psi,
-        "SS": df_torsion["B_SS"],
-        "SASA": df_torsion["SASA"]
+        "SS": df["B_SS"] if "B_SS" in df.columns else "L",
+        "SASA": df["SASA"] if "SASA" in df.columns else "N"
     }
 
     for i in range(1, 6):
-        chi_col = f"CHI{i}"
-        dict_delta[f"D_{chi_col}"] = normalize_delta_angles(df_torsion[f"B_{chi_col}"] - df_torsion[f"U_{chi_col}"])
+        b_col, u_col = f"B_CHI{i}", f"U_CHI{i}"
+        if b_col in df.columns and u_col in df.columns:
+            dict_delta[f"D_CHI{i}"] = circ_diff(df[b_col], df[u_col])
 
     df_delta = pd.DataFrame(dict_delta)
     return df_delta
 
 
-def compute_pearson_correlations(df_delta, chi_col, residues):
+def benjamini_hochberg(p_values):
+    """Computes Benjamini-Hochberg False Discovery Rate (FDR) adjusted p-values."""
+    p_vals = np.asarray(p_values, dtype=float)
+    n = len(p_vals)
+    if n == 0:
+        return np.array([])
+    valid_mask = ~np.isnan(p_vals)
+    adj_p = np.full(n, np.nan)
+    if not np.any(valid_mask):
+        return adj_p
+
+    valid_p = p_vals[valid_mask]
+    n_valid = len(valid_p)
+    s_idx = np.argsort(valid_p)
+    s_p = valid_p[s_idx]
+
+    adj_valid = np.zeros(n_valid)
+    c_min = 1.0
+    for i in range(n_valid - 1, -1, -1):
+        rank = i + 1
+        a = (s_p[i] * n_valid) / rank
+        c_min = min(c_min, a)
+        adj_valid[s_idx[i]] = min(1.0, c_min)
+
+    adj_p[valid_mask] = adj_valid
+    return adj_p
+
+
+def compute_spearman_correlations(df_delta, chi_col, residues):
     """
-    Compute Pearson correlation and p-value matrix between D_PHI_PSI and specified D_CHI column
-    for Interface (I) and Non-interface (N) states across specified residues.
+    Compute Spearman rank correlation and FDR-adjusted p-values between RMS D_PHI_PSI and specified D_CHI column
+    at both Residue-level and PDB-structure level for Interface (I) and Non-interface (N) states.
     """
+    label_col = 'D_LABEL' if 'D_LABEL' in df_delta.columns else ('LABEL' if 'LABEL' in df_delta.columns else 'AA')
     corr_matrices = {}
+
     for sasa in SASA_TYPES:
-        sasa_df = df_delta[df_delta['SASA'].str.startswith(sasa)]
-        data_list = []
+        sasa_df = df_delta[df_delta['SASA'].astype(str).str.startswith(sasa)]
+        res_data_list = []
+        p_raw_list = []
 
         for res in residues:
-            res_df = sasa_df[sasa_df['D_LABEL'].str[:3] == res]
-            if len(res_df) > 1:
-                r_val, p_val = stats.pearsonr(res_df['D_PHI_PSI'], res_df[f"D_{chi_col}"])
+            res_df = sasa_df[sasa_df[label_col].astype(str).str[:3] == res].dropna(subset=['D_PHI_PSI', f"D_{chi_col}"])
+            if len(res_df) > 2:
+                r_val, p_val = stats.spearmanr(res_df['D_PHI_PSI'], np.abs(res_df[f"D_{chi_col}"]))
+
+                # PDB structure-level aggregation
+                pdb_agg = res_df.groupby('PDB')[['D_PHI_PSI', f"D_{chi_col}"]].mean()
+                if len(pdb_agg) > 2:
+                    pdb_r, pdb_p = stats.spearmanr(pdb_agg['D_PHI_PSI'], np.abs(pdb_agg[f"D_{chi_col}"]))
+                else:
+                    pdb_r, pdb_p = np.nan, np.nan
             else:
                 r_val, p_val = np.nan, np.nan
+                pdb_r, pdb_p = np.nan, np.nan
 
-            data_list.append([r_val, p_val])
-            print("%s %s D_PHI_PSI vs D_%s: %7.4f\t%7.4f" % (res, sasa, chi_col, r_val, p_val))
+            res_data_list.append([r_val, p_val])
+            p_raw_list.append(p_val)
+            print("%s %s RMS D_PHI_PSI vs D_%s (Spearman): Residue rho=%7.4f p=%7.4e | PDB rho=%7.4f p=%7.4e" % 
+                  (res, sasa, chi_col, r_val, p_val, pdb_r, pdb_p))
 
-        corr_matrices[sasa] = np.array(data_list)
+        # FDR BH Adjustment
+        p_adj = benjamini_hochberg(p_raw_list)
+        res_arr = np.array(res_data_list)
+        if len(res_arr) > 0:
+            res_arr[:, 1] = p_adj
+
+        corr_matrices[sasa] = res_arr
 
     return corr_matrices["I"], corr_matrices["N"]
 
@@ -139,7 +204,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:7.4f}", textcolors=("black", "whi
 
 def plot_correlation_figures(chi_idx, chi_name, residues, int_data, nint_data, output_dir):
     """Generate and save heatmap correlation figures."""
-    labels = ["correlation", "p-value"]
+    labels = ["Spearman rho", "FDR p-adj"]
 
     if len(residues) <= 5:
         fig_size = (5.0, 5.0)
@@ -155,8 +220,8 @@ def plot_correlation_figures(chi_idx, chi_name, residues, int_data, nint_data, o
     fig, (ax1, ax2) = plt.subplots(figsize=fig_size, ncols=2)
     plt.subplots_adjust(**adj_kwargs)
 
-    im1, cbar1 = draw_heatmap(int_data, residues, labels, ax=ax1, cmap="Greys", vmin=-1, vmax=1, cbarlabel="correlation coeff")
-    im2, cbar2 = draw_heatmap(nint_data, residues, labels, ax=ax2, cmap="Greys", vmin=-1, vmax=1, cbarlabel="correlation coeff")
+    im1, cbar1 = draw_heatmap(int_data, residues, labels, ax=ax1, cmap="Greys", vmin=-1, vmax=1, cbarlabel="Spearman rho")
+    im2, cbar2 = draw_heatmap(nint_data, residues, labels, ax=ax2, cmap="Greys", vmin=-1, vmax=1, cbarlabel="Spearman rho")
 
     cbar2.minorticks_on()
     cbar1.remove()
@@ -181,9 +246,20 @@ def plot_correlation_figures(chi_idx, chi_name, residues, int_data, nint_data, o
 
 
 def main():
-    input_rotamer_data = DATASET_DIR / 'PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv'
+    input_rotamer_data = DATASET_DIR / 'ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json'
+    if not input_rotamer_data.exists():
+        input_rotamer_data = DATASET_DIR / 'ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv'
+
     logging.info(f"Reading torsion angle dataset from: {input_rotamer_data}")
-    df_torsion = pd.read_csv(input_rotamer_data, sep=",")
+    if input_rotamer_data.suffix.lower() == '.json':
+        df_torsion = pd.read_json(input_rotamer_data)
+    else:
+        try:
+            df_torsion = pd.read_csv(input_rotamer_data, sep=",")
+            if "LABEL" not in df_torsion.columns and "D_LABEL" not in df_torsion.columns:
+                df_torsion = pd.read_csv(input_rotamer_data, sep="\t")
+        except Exception:
+            df_torsion = pd.read_csv(input_rotamer_data, sep="\t")
 
     # Calculate delta angles
     df_delta_angles = calculate_delta_angles(df_torsion)
@@ -198,7 +274,7 @@ def main():
 
     for idx, chi_name in chi_list:
         residues = CHI_RESIDUES[chi_name]
-        int_data, nint_data = compute_pearson_correlations(df_delta_angles, chi_name, residues)
+        int_data, nint_data = compute_spearman_correlations(df_delta_angles, chi_name, residues)
         plot_correlation_figures(idx, chi_name, residues, int_data, nint_data, FIGURES_DIR)
 
 

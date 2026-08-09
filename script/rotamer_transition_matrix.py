@@ -76,23 +76,63 @@ class RotamerTransitionMatrix:
         self.sasa_filter = sasa_filter
         self.threshold = threshold
 
+def fold_symmetric_chi(val, aa, chi_idx):
+    """
+    Folds terminal symmetric chi angles (ASP chi2, GLU chi3, PHE chi2, TYR chi2) into [-90, 90) deg.
+    """
+    if pd.isna(val) or val is None:
+        return None
+    v = float(val)
+    aa_upper = str(aa).upper().strip()
+    if (aa_upper in ['ASP', 'PHE', 'TYR'] and chi_idx == 2) or (aa_upper == 'GLU' and chi_idx == 3):
+        while v >= 90.0:
+            v -= 180.0
+        while v < -90.0:
+            v += 180.0
+    return v
+
+
+class RotamerTransitionMatrix:
+    """
+    Class to calculate and plot side-chain rotamer transition matrices between
+    Unbound ('U') and Bound ('B') states for protein residues across Chi angles (1..4).
+    """
+
+    # Rotamer state symbols: T (trans/gg), p (g+), P (gt), t (t), M (tg), m (g-)
+    CHI_STATES = ["T", "p", "P", "t", "M", "m"]
+
+    # Target residues for each Chi angle depth
+    CHI_DEPTH_RESIDUES = {
+        1: ["CYS", "SER", "THR", "VAL"],
+        2: ["ARG", "ASN", "ASP", "GLU", "GLN", "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "TRP", "TYR"],
+        3: ["ARG", "LYS", "GLU", "GLN", "MET"],
+        4: ["ARG", "LYS"],
+    }
+
+    def __init__(self, df=None, chi_depth=1, sasa_filter=None, threshold=0.0):
+        """
+        Initialize the RotamerTransitionMatrix calculator.
+        """
+        self.df = df
+        self.chi_depth = chi_depth
+        self.sasa_filter = sasa_filter
+        self.threshold = threshold
+
     @staticmethod
     def classify_chi_state(val):
         """
         Classify a side-chain torsion angle value (in degrees) into a rotamer state symbol.
-
-        Parameters:
-        -----------
-        val : float
-            Dihedral angle in degrees (-180 to 180).
-
-        Returns:
-        --------
-        str : Rotamer state symbol ('T', 'p', 'P', 't', 'M', 'm').
+        Returns None for missing / NaN values.
         """
-        if pd.isna(val):
-            return "T"
-        val = float(val)
+        if pd.isna(val) or val is None:
+            return None
+        try:
+            val = float(val)
+            if np.isnan(val):
+                return None
+        except (ValueError, TypeError):
+            return None
+
         if -30.0 < val <= 30.0:
             return "T"  # Trans / gg (around 0°)
         elif 30.0 < val <= 90.0:
@@ -105,7 +145,7 @@ class RotamerTransitionMatrix:
             return "M"  # tg (around -120°)
         elif -90.0 < val <= -30.0:
             return "m"  # g- (around -60°)
-        return "T"
+        return None
 
     def _generate_state_combinations(self, depth):
         """Generate all possible rotamer state combination strings for a given Chi depth."""
@@ -116,28 +156,6 @@ class RotamerTransitionMatrix:
     def compute_transition_matrix(self, df, residue, chi_depth=None, sasa_filter=None, threshold=None):
         """
         Compute the transition count and probability matrices from Unbound ('U') to Bound ('B') states.
-
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            Torsion angle dataset.
-        residue : str
-            Three-letter amino acid code (e.g. 'CYS', 'ARG').
-        chi_depth : int, optional
-            Chi angle depth (1, 2, 3, or 4). Defaults to self.chi_depth.
-        sasa_filter : str, optional
-            'I', 'N', or None. Defaults to self.sasa_filter.
-        threshold : float, optional
-            Filtering threshold for transition probability.
-
-        Returns:
-        --------
-        dict containing:
-            'counts_df': pd.DataFrame (Unbound states as rows, Bound states as columns)
-            'prob_df': pd.DataFrame (Row-normalized transition probabilities)
-            'unbound_states': list of str
-            'bound_states': list of str
-            'total_count': int
         """
         depth = chi_depth if chi_depth is not None else self.chi_depth
         sasa = sasa_filter if sasa_filter is not None else self.sasa_filter
@@ -166,10 +184,26 @@ class RotamerTransitionMatrix:
         u_states = []
         b_states = []
         for _, row in df_res.iterrows():
-            u_st = "".join([self.classify_chi_state(row[col]) for col in u_cols])
-            b_st = "".join([self.classify_chi_state(row[col]) for col in b_cols])
-            u_states.append(u_st)
-            b_states.append(b_st)
+            u_chis = [row[col] for col in u_cols]
+            b_chis = [row[col] for col in b_cols]
+            if any(pd.isna(v) or v is None for v in u_chis) or any(pd.isna(v) or v is None for v in b_chis):
+                continue
+            u_symbols = []
+            b_symbols = []
+            valid_row = True
+            for i in range(1, depth + 1):
+                u_val = fold_symmetric_chi(row[f"U_CHI{i}"], residue, i)
+                b_val = fold_symmetric_chi(row[f"B_CHI{i}"], residue, i)
+                u_sym = self.classify_chi_state(u_val)
+                b_sym = self.classify_chi_state(b_val)
+                if u_sym is None or b_sym is None:
+                    valid_row = False
+                    break
+                u_symbols.append(u_sym)
+                b_symbols.append(b_sym)
+            if valid_row:
+                u_states.append("".join(u_symbols))
+                b_states.append("".join(b_symbols))
 
         # Generate full possible state list or active state list
         all_possible_states = self._generate_state_combinations(depth)

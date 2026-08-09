@@ -63,6 +63,15 @@ RESIDUE_CHI_MAP = {
 }
 
 
+def _filter_res_df(df, res):
+    if "LABEL" in df.columns:
+        return df[df["LABEL"].astype(str).str[:3] == res]
+    elif "AA" in df.columns:
+        return df[df["AA"].astype(str).str[:3] == res]
+    else:
+        return pd.DataFrame()
+
+
 def get_max_bin_info(data_series, num_bins=36, angle_range=(-180, 180)):
     """
     Find the bin with maximum frequency count and compute member statistics.
@@ -96,8 +105,9 @@ def get_max_bin_info(data_series, num_bins=36, angle_range=(-180, 180)):
 
 def compute_distribution_summary(df, state_prefix="B"):
     """
-    Compute distribution summary statistics for all residues and Chi angles.
+    Compute distribution summary statistics for all residues and Chi angles using circular statistics.
     """
+    from scipy.stats import circmean, circstd
     logging.info(f"Computing distribution statistics for state '{state_prefix}'...")
     summary_rows = []
 
@@ -105,20 +115,38 @@ def compute_distribution_summary(df, state_prefix="B"):
         if not chi_list:
             continue
 
-        res_df = df[df["LABEL"].str[:3] == res]
+        if "LABEL" in df.columns:
+            res_df = df[df["LABEL"].astype(str).str[:3] == res]
+        elif "AA" in df.columns:
+            res_df = df[df["AA"].astype(str).str[:3] == res]
+        else:
+            continue
         for chi in chi_list:
             col_name = f"{state_prefix}_{chi}"
             if col_name not in res_df.columns:
                 continue
 
             series = res_df[col_name]
-            # Exclude zero or NaN values if unassigned
-            non_zero_series = series[series != 0.0] if res not in ["PRO"] else series
+            # Exclude NaN or null values while preserving valid 0.0 deg dihedrals
+            valid_vals = []
+            for v in series.dropna():
+                try:
+                    vf = float(v)
+                    if not np.isnan(vf):
+                        valid_vals.append(vf)
+                except (ValueError, TypeError):
+                    continue
 
-            mean_val = float(non_zero_series.mean()) if len(non_zero_series) > 0 else np.nan
-            std_val = float(non_zero_series.std()) if len(non_zero_series) > 0 else np.nan
+            valid_arr = np.array(valid_vals, dtype=float)
 
-            max_info = get_max_bin_info(non_zero_series, num_bins=36)
+            if len(valid_arr) > 0:
+                mean_val = float(circmean(valid_arr, high=180.0, low=-180.0))
+                std_val = float(circstd(valid_arr, high=180.0, low=-180.0))
+            else:
+                mean_val = np.nan
+                std_val = np.nan
+
+            max_info = get_max_bin_info(valid_arr, num_bins=36)
 
             summary_rows.append(
                 {
@@ -126,10 +154,10 @@ def compute_distribution_summary(df, state_prefix="B"):
                     "CHI_ANGLE": chi,
                     "STATE": state_prefix,
                     "TOTAL_COUNT": max_info["count"],
-                    "MEAN_ANGLE": round(mean_val, 2),
-                    "STD_ANGLE": round(std_val, 2),
-                    "PEAK_BIN_CENTER": round(max_info["max_bin_center"], 2),
-                    "PEAK_BIN_RANGE": f"[{max_info['max_bin_start']:.1f}, {max_info['max_bin_end']:.1f}]",
+                    "MEAN_ANGLE": round(mean_val, 2) if not np.isnan(mean_val) else np.nan,
+                    "STD_ANGLE": round(std_val, 2) if not np.isnan(std_val) else np.nan,
+                    "PEAK_BIN_CENTER": round(max_info["max_bin_center"], 2) if not np.isnan(max_info["max_bin_center"]) else np.nan,
+                    "PEAK_BIN_RANGE": f"[{max_info['max_bin_start']:.1f}, {max_info['max_bin_end']:.1f}]" if not np.isnan(max_info["max_bin_start"]) else "N/A",
                     "PEAK_BIN_COUNT": max_info["max_bin_count"],
                 }
             )
@@ -165,70 +193,59 @@ def format_axis(ax, title, xlabel, ylabel, xlim=(-180, 180), xtick_step=60, y_li
     ax.spines["right"].set_visible(False)
 
 
-def plot_arg_distribution(df, state="B", kde=True, save_path=None):
-    """Plot Chi1 to Chi4 distributions for Arginine (ARG) in a 2x2 grid."""
-    fig, axs = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
-    arg_df = df[df["LABEL"].str[:3] == "ARG"]
-
-    chi_angles = ["CHI1", "CHI2", "CHI3", "CHI4"]
-    coords = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-    for chi, (r, c) in zip(chi_angles, coords):
-        ax = axs[r, c]
-        col = f"{state}_{chi}"
-        data = arg_df[col]
-        sns.histplot(
-            data,
-            bins=36,
-            binrange=(-180, 180),
-            kde=kde,
-            color="#2b5c8f",
-            edgecolor="white",
-            ax=ax,
-            alpha=0.7,
-        )
-        xlabel = r"$\chi_{" + chi[-1] + r"}$ (degrees)" if r == 1 else None
-        ylabel = "Count" if c == 0 else None
-        format_axis(ax, f"ARG {chi}", xlabel, ylabel)
-
-    plt.tight_layout()
+def _save_figure(fig, save_path):
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
         logging.info(f"Saved figure: {save_path}")
     plt.close(fig)
+
+
+def plot_arg_distribution(df, state="B", kde=True, save_path=None):
+    """Plot Chi1 to Chi4 distributions for Arginine (ARG) in a 2x2 grid."""
+    arg_df = _filter_res_df(df, "ARG")
+    if len(arg_df) == 0:
+        logging.warning("No data found for ARG.")
+        return
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    fig.suptitle(f"Arginine (ARG) Side-Chain Torsion Distributions (State: {state})", fontsize=14, fontweight="bold")
+
+    chi_cols = [f"{state}_CHI{i}" for i in range(1, 5)]
+    titles = [r"$\chi_1$ Dihedral", r"$\chi_2$ Dihedral", r"$\chi_3$ Dihedral", r"$\chi_4$ Dihedral"]
+
+    for idx, (ax, col, title) in enumerate(zip(axes.flat, chi_cols, titles)):
+        if col in arg_df.columns:
+            data = arg_df[col].dropna()
+            if len(data) > 0:
+                sns.histplot(data, bins=36, kde=kde, ax=ax, color="#00468B", edgecolor="black", alpha=0.7)
+            format_axis(ax, title, f"{title} (deg)", "Density / Count")
+
+    plt.tight_layout()
+    _save_figure(fig, save_path)
 
 
 def plot_lys_distribution(df, state="B", kde=True, save_path=None):
     """Plot Chi1 to Chi4 distributions for Lysine (LYS) in a 2x2 grid."""
-    fig, axs = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
-    lys_df = df[df["LABEL"].str[:3] == "LYS"]
+    lys_df = _filter_res_df(df, "LYS")
+    if len(lys_df) == 0:
+        logging.warning("No data found for LYS.")
+        return
 
-    chi_angles = ["CHI1", "CHI2", "CHI3", "CHI4"]
-    coords = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    fig.suptitle(f"Lysine (LYS) Side-Chain Torsion Distributions (State: {state})", fontsize=14, fontweight="bold")
 
-    for chi, (r, c) in zip(chi_angles, coords):
-        ax = axs[r, c]
-        col = f"{state}_{chi}"
-        data = lys_df[col]
-        sns.histplot(
-            data,
-            bins=36,
-            binrange=(-180, 180),
-            kde=kde,
-            color="#d95f02",
-            edgecolor="white",
-            ax=ax,
-            alpha=0.7,
-        )
-        xlabel = r"$\chi_{" + chi[-1] + r"}$ (degrees)" if r == 1 else None
-        ylabel = "Count" if c == 0 else None
-        format_axis(ax, f"LYS {chi}", xlabel, ylabel)
+    chi_cols = [f"{state}_CHI{i}" for i in range(1, 5)]
+    titles = [r"$\chi_1$ Dihedral", r"$\chi_2$ Dihedral", r"$\chi_3$ Dihedral", r"$\chi_4$ Dihedral"]
+
+    for idx, (ax, col, title) in enumerate(zip(axes.flat, chi_cols, titles)):
+        if col in lys_df.columns:
+            data = lys_df[col].dropna()
+            if len(data) > 0:
+                sns.histplot(data, bins=36, kde=kde, ax=ax, color="#ED0000", edgecolor="black", alpha=0.7)
+            format_axis(ax, title, f"{title} (deg)", "Density / Count")
 
     plt.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
-    plt.close(fig)
+    _save_figure(fig, save_path)
 
 
 def plot_glu_gln_met_distribution(df, state="B", kde=True, save_path=None):
@@ -239,44 +256,48 @@ def plot_glu_gln_met_distribution(df, state="B", kde=True, save_path=None):
     colors = ["#7570b3", "#e7298a", "#66a61e"]
 
     for r, res in enumerate(residues):
-        res_df = df[df["LABEL"].str[:3] == res]
+        res_df = _filter_res_df(df, res)
         for c, chi in enumerate(chi_angles):
             ax = axs[r, c]
             col = f"{state}_{chi}"
-            data = res_df[col]
-            sns.histplot(
-                data,
-                bins=36,
-                binrange=(-180, 180),
-                kde=kde,
-                color=colors[r],
-                edgecolor="white",
-                ax=ax,
-                alpha=0.7,
-            )
+            if col in res_df.columns:
+                data = res_df[col].dropna()
+                if len(data) > 0:
+                    sns.histplot(
+                        data,
+                        bins=36,
+                        binrange=(-180, 180),
+                        kde=kde,
+                        color=colors[r],
+                        edgecolor="white",
+                        ax=ax,
+                        alpha=0.7,
+                    )
             xlabel = r"$\chi_{" + chi[-1] + r"}$ (degrees)" if r == 2 else None
             ylabel = "Count" if c == 0 else None
             format_axis(ax, f"{res} {chi}", xlabel, ylabel)
 
     plt.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
-    plt.close(fig)
+    _save_figure(fig, save_path)
 
 
 def plot_two_chi_pairs_distribution(df, res1, res2, title_prefix, color="#1b9e77", state="B", kde=True, save_path=None):
     """Plot Chi1 and Chi2 distributions for a pair of amino acids (e.g. ASP/ASN, LEU/ILE, PHE/HIS, TRP/TYR) in a 2x2 grid."""
     fig, axs = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
-    res1_df = df[df["LABEL"].str[:3] == res1]
-    res2_df = df[df["LABEL"].str[:3] == res2]
+    res1_df = _filter_res_df(df, res1)
+    res2_df = _filter_res_df(df, res2)
 
-    # Row 0: Chi1, Row 1: Chi2
-    # Col 0: Res1, Col 1: Res2
-    sns.histplot(res1_df[f"{state}_CHI1"], bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 0], alpha=0.7)
-    sns.histplot(res2_df[f"{state}_CHI1"], bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 1], alpha=0.7)
-    sns.histplot(res1_df[f"{state}_CHI2"], bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 0], alpha=0.7)
-    sns.histplot(res2_df[f"{state}_CHI2"], bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 1], alpha=0.7)
+    c1 = f"{state}_CHI1"
+    c2 = f"{state}_CHI2"
+
+    if c1 in res1_df.columns:
+        sns.histplot(res1_df[c1].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 0], alpha=0.7)
+    if c1 in res2_df.columns:
+        sns.histplot(res2_df[c1].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 1], alpha=0.7)
+    if c2 in res1_df.columns:
+        sns.histplot(res1_df[c2].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 0], alpha=0.7)
+    if c2 in res2_df.columns:
+        sns.histplot(res2_df[c2].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 1], alpha=0.7)
 
     format_axis(axs[0, 0], f"{res1} $\chi_1$", None, "Count")
     format_axis(axs[0, 1], f"{res2} $\chi_1$", None, None)
@@ -284,10 +305,7 @@ def plot_two_chi_pairs_distribution(df, res1, res2, title_prefix, color="#1b9e77
     format_axis(axs[1, 1], f"{res2} $\chi_2$", r"$\chi_2$ (degrees)", None)
 
     plt.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
-    plt.close(fig)
+    _save_figure(fig, save_path)
 
 
 def plot_single_chi_group_distribution(df, residues=["CYS", "SER", "THR", "VAL"], state="B", kde=True, save_path=None):
@@ -298,45 +316,47 @@ def plot_single_chi_group_distribution(df, residues=["CYS", "SER", "THR", "VAL"]
 
     for idx, (res, (r, c)) in enumerate(zip(residues, coords)):
         ax = axs[r, c]
-        res_df = df[df["LABEL"].str[:3] == res]
+        res_df = _filter_res_df(df, res)
         col = f"{state}_CHI1"
-        sns.histplot(
-            res_df[col],
-            bins=36,
-            binrange=(-180, 180),
-            kde=kde,
-            color=colors[idx],
-            edgecolor="white",
-            ax=ax,
-            alpha=0.7,
-        )
+        if col in res_df.columns:
+            data = res_df[col].dropna()
+            if len(data) > 0:
+                sns.histplot(
+                    data,
+                    bins=36,
+                    binrange=(-180, 180),
+                    kde=kde,
+                    color=colors[idx],
+                    edgecolor="white",
+                    ax=ax,
+                    alpha=0.7,
+                )
         xlabel = r"$\chi_1$ (degrees)" if r == 1 else None
         ylabel = "Count" if c == 0 else None
         format_axis(ax, f"{res} $\chi_1$", xlabel, ylabel)
 
     plt.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
-    plt.close(fig)
+    _save_figure(fig, save_path)
 
 
 def plot_proline_distribution(df, state="B", kde=True, save_path=None):
     """Plot Chi1 and Chi2 distribution for Proline (PRO) in a 1x2 grid (-60° to 60° range)."""
     fig, axs = plt.subplots(1, 2, figsize=(10, 4.5))
-    pro_df = df[df["LABEL"].str[:3] == "PRO"]
+    pro_df = _filter_res_df(df, "PRO")
 
-    sns.histplot(pro_df[f"{state}_CHI1"], bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[0], alpha=0.7)
-    sns.histplot(pro_df[f"{state}_CHI2"], bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[1], alpha=0.7)
+    c1 = f"{state}_CHI1"
+    c2 = f"{state}_CHI2"
+
+    if c1 in pro_df.columns:
+        sns.histplot(pro_df[c1].dropna(), bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[0], alpha=0.7)
+    if c2 in pro_df.columns:
+        sns.histplot(pro_df[c2].dropna(), bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[1], alpha=0.7)
 
     format_axis(axs[0], r"PRO $\chi_1$", r"$\chi_1$ (degrees)", "Count", xlim=(-60, 60), xtick_step=20)
     format_axis(axs[1], r"PRO $\chi_2$", r"$\chi_2$ (degrees)", None, xlim=(-60, 60), xtick_step=20)
 
     plt.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
-    plt.close(fig)
+    _save_figure(fig, save_path)
 
 
 def generate_all_distribution_plots(df, state="B", kde=True, figures_dir=FIGURES_DIR):
@@ -359,7 +379,7 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
+        default=DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json",
         help="Path to dataset containing backbone & sidechain torsion angles.",
     )
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV summary files.")
