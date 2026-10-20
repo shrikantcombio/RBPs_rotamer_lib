@@ -1,0 +1,6 @@
+{
+  "prdbv3_rotamer_dir": "/path/to/PRDBv3_rotamer",
+  "rota_assign_dir": "../rota_assign",
+  "dssp_bin": "/path/to/dssp",
+  "protein_protein_dir": "../protein-protein"
+}

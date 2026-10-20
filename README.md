@@ -13,15 +13,19 @@ RBPs_rotamer_lib/
 │   ├── RBPs_I_bbd_U_rotamer_lib.[csv|tsv|json]   # Unbound Interface (I)
 │   ├── RBPs_N_bbd_B_rotamer_lib.[csv|tsv|json]   # Bound Non-Interface Surface (N)
 │   ├── RBPs_N_bbd_U_rotamer_lib.[csv|tsv|json]   # Unbound Non-Interface Surface (N)
-│   ├── RBPs_bbd_B_rotamer_lib.[csv|tsv|json]     # Bound Overall Surface (B)
-│   └── RBPs_bbd_U_rotamer_lib.[csv|tsv|json]     # Unbound Overall Surface (U)
+│   ├── RBPs_S_bbd_B_rotamer_lib.[csv|tsv|json]   # Bound Surface (S = I + N)
+│   ├── RBPs_S_bbd_U_rotamer_lib.[csv|tsv|json]   # Unbound Surface (S = I + N)
+│   ├── RBPs_bbd_B_rotamer_lib.[csv|tsv|json]     # Bound, all residues (I + N + C)
+│   └── RBPs_bbd_U_rotamer_lib.[csv|tsv|json]     # Unbound, all residues (I + N + C)
 ├── RBPs_BBI_rotamer_lib/         # Backbone-Independent (Global) Libraries
 │   ├── RBPs_I_bbi_B_rotamer_lib.[csv|tsv|json]   # Bound Interface (I)
 │   ├── RBPs_I_bbi_U_rotamer_lib.[csv|tsv|json]   # Unbound Interface (I)
 │   ├── RBPs_N_bbi_B_rotamer_lib.[csv|tsv|json]   # Bound Non-Interface Surface (N)
 │   ├── RBPs_N_bbi_U_rotamer_lib.[csv|tsv|json]   # Unbound Non-Interface Surface (N)
-│   ├── RBPs_bbi_B_rotamer_lib.[csv|tsv|json]     # Bound Overall Surface (B)
-│   └── RBPs_bbi_U_rotamer_lib.[csv|tsv|json]     # Unbound Overall Surface (U)
+│   ├── RBPs_S_bbi_B_rotamer_lib.[csv|tsv|json]   # Bound Surface (S = I + N)
+│   ├── RBPs_S_bbi_U_rotamer_lib.[csv|tsv|json]   # Unbound Surface (S = I + N)
+│   ├── RBPs_bbi_B_rotamer_lib.[csv|tsv|json]     # Bound, all residues (I + N + C)
+│   └── RBPs_bbi_U_rotamer_lib.[csv|tsv|json]     # Unbound, all residues (I + N + C)
 ├── input_files/                  # Cleaned input datasets (PRDBv3 187/288 complexes)
 ├── output_files/                 # Torsion angle dataset exports (CSV, TSV, JSON)
 ├── script/                       # Core python engines for derivation & analysis
@@ -73,8 +77,8 @@ Residues are categorized based on surface accessibility and interface burial usi
 | `RBPs_N_bbd_U_rotamer_lib.[csv\|tsv\|json]` | Unbound non-interface rotamers ($N$, Unbound $U$) |
 | `RBPs_S_bbd_B_rotamer_lib.[csv\|tsv\|json]` | Bound overall surface rotamers ($S$, Bound $B$) |
 | `RBPs_S_bbd_U_rotamer_lib.[csv\|tsv\|json]` | Unbound overall surface rotamers ($S$, Unbound $U$) |
-| `RBPs_bbd_B_rotamer_lib.[csv\|tsv\|json]` | Overall surface bound rotamers (Bound $B$) |
-| `RBPs_bbd_U_rotamer_lib.[csv\|tsv\|json]` | Overall surface unbound rotamers (Unbound $U$) |
+| `RBPs_bbd_B_rotamer_lib.[csv\|tsv\|json]` | All bound residues, including core ($I + N + C$, Bound $B$) |
+| `RBPs_bbd_U_rotamer_lib.[csv\|tsv\|json]` | All unbound residues, including core ($I + N + C$, Unbound $U$) |
 
 ### Column Schema
 
@@ -103,8 +107,8 @@ Residues are categorized based on surface accessibility and interface burial usi
 | `RBPs_N_bbi_U_rotamer_lib.[csv\|tsv\|json]` | Unbound non-interface rotamers ($N$, Backbone Independent) |
 | `RBPs_S_bbi_B_rotamer_lib.[csv\|tsv\|json]` | Bound overall surface rotamers ($S$, Backbone Independent) |
 | `RBPs_S_bbi_U_rotamer_lib.[csv\|tsv\|json]` | Unbound overall surface rotamers ($S$, Backbone Independent) |
-| `RBPs_bbi_B_rotamer_lib.[csv\|tsv\|json]` | Overall bound residues (Backbone Independent) |
-| `RBPs_bbi_U_rotamer_lib.[csv\|tsv\|json]` | Overall unbound residues (Backbone Independent) |
+| `RBPs_bbi_B_rotamer_lib.[csv\|tsv\|json]` | All bound residues, including core (Backbone Independent) |
+| `RBPs_bbi_U_rotamer_lib.[csv\|tsv\|json]` | All unbound residues, including core (Backbone Independent) |
 
 ### Column Schema
 
@@ -116,6 +120,29 @@ Residues are categorized based on surface accessibility and interface burial usi
 | `Prob` | Global rotamer probability $P(\text{rotamer})$ |
 | `CHI[1-4]` | Global weighted circular mean $\chi_n$ angle (degrees) |
 | `CHI[1-4]Sig` | Global weighted circular standard deviation of $\chi_n$ angle (degrees) |
+
+---
+
+## 🔁 Regenerating the Dataset and Libraries
+
+1. Point the scripts at your data: `cp config/paths.example.json config/paths.json` and set
+   `prdbv3_rotamer_dir` (equal-residue `<C_PDB>_<U_PDB>_C.pdb` / `_U.pdb` pairs with PRince `.int`/`.sur`
+   files), `rota_assign_dir` and `dssp_bin`.
+2. Torsion dataset: `python script/generate_187_protein_torsion_datasets.py`
+   (writes `input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`, the per-complex
+   pairing log `output_files/..._187_pairing_log.csv`, and CSV/TSV/JSON copies in `output_files/`).
+3. Libraries: `python script/derive_all_updated_rotamer_libraries.py`.
+
+Both steps are deterministic: rerunning them on the same inputs reproduces the committed files byte for byte.
+
+**Bound/unbound pairing.** Unbound residues are paired with bound residues by chain order and sequence
+(`rota_assign/macromol_torsion/pairing.py`), not by residue label, because unbound chains are usually
+relabelled or renumbered.
+
+**Missing values.** Angles that cannot be computed are left empty (NaN in pandas, `null` in JSON),
+never written as 0.0: chain termini and residues next to chain breaks (no φ or ψ), missing side-chain
+atoms, and residues without an unbound partner (all `U_*` columns empty). Backbone-dependent libraries
+use only residues with both φ and ψ defined.
 
 ---
 

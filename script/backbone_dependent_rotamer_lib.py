@@ -233,7 +233,9 @@ class BackboneDependentRotamerLibrary:
         #    This ensures a residue with missing terminal chi does not contribute
         #    NaN-derived bin assignments at any depth, but still contributes to
         #    shallower depths where its data is real.
-        depth_valid_mask = np.ones(len(data), dtype=bool)  # cumulative: valid up to depth n
+        # Backbone-dependent statistics need a defined (phi, psi): chain termini and residues
+        # next to chain breaks have NaN phi or psi and are excluded
+        depth_valid_mask = data[phi_col].notna().values & data[psi_col].notna().values
         valid_masks = []
         for n in range(nchi):
             depth_valid_mask = depth_valid_mask & data[chi_cols[n]].notna().values

@@ -10,3 +10,5 @@ figures/*
 manuscript_results/*
 manuscript_results/
 for_me/*
+# Machine-specific paths (template: config/paths.example.json)
+config/paths.json

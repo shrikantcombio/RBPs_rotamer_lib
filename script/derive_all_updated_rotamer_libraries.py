@@ -17,11 +17,18 @@ Output Directories:
 import os
 import sys
 import json
+import math
 import logging
 import pandas as pd
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def records_with_null(df):
+    """DataFrame rows as dicts with NaN replaced by None, so json.dump writes valid JSON (null)."""
+    return [{k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in rec.items()}
+            for rec in df.to_dict(orient="records")]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent # /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib
@@ -70,7 +77,7 @@ def export_unified_library_files(lib_dict, output_dir, prefix):
     df_combined.to_csv(csv_path, index=False)
     df_combined.to_csv(tsv_path, sep="\t", index=False)
 
-    records = df_combined.to_dict(orient="records")
+    records = records_with_null(df_combined)
     with open(json_path, "w") as f_json:
         json.dump(records, f_json, indent=2)
 

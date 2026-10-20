@@ -2,28 +2,28 @@
   {
     "Flexibility_Class": "R",
     "Class_Name": "Rigid (R)",
-    "Interface_Total": 3383,
-    "Interface_Transition_Rate_Percent": 35.77,
-    "Interface_CS_Percent": 24.36,
-    "Interface_IF_Percent": 11.41,
-    "DeltaE_Mean": 0.006
+    "Interface_Total": 3025,
+    "Interface_Transition_Rate_Percent": 39.34,
+    "Interface_CS_Percent": 29.42,
+    "Interface_IF_Percent": 9.92,
+    "DeltaE_Mean": 0.013
   },
   {
     "Flexibility_Class": "S",
     "Class_Name": "Semi-flexible (S)",
-    "Interface_Total": 1396,
-    "Interface_Transition_Rate_Percent": 39.9,
-    "Interface_CS_Percent": 27.79,
-    "Interface_IF_Percent": 12.11,
-    "DeltaE_Mean": -0.036
+    "Interface_Total": 1207,
+    "Interface_Transition_Rate_Percent": 42.42,
+    "Interface_CS_Percent": 29.66,
+    "Interface_IF_Percent": 12.76,
+    "DeltaE_Mean": -0.047
   },
   {
     "Flexibility_Class": "F",
     "Class_Name": "Flexible (F)",
-    "Interface_Total": 1518,
-    "Interface_Transition_Rate_Percent": 43.21,
-    "Interface_CS_Percent": 28.33,
-    "Interface_IF_Percent": 14.89,
-    "DeltaE_Mean": 0.007
+    "Interface_Total": 1313,
+    "Interface_Transition_Rate_Percent": 44.4,
+    "Interface_CS_Percent": 32.52,
+    "Interface_IF_Percent": 11.88,
+    "DeltaE_Mean": -0.007
   }
 ]

@@ -2,41 +2,41 @@
   {
     "Structural_Class": "A",
     "Class_Name": "Class A (tRNA)",
-    "Interface_Total": 1501,
-    "Interface_Transition_Rate_Percent": 40.04,
-    "Interface_Rigid_Percent": 59.96,
-    "Interface_CS_Percent": 27.32,
-    "Interface_IF_Percent": 12.72,
-    "DeltaE_Mean": 0.01
+    "Interface_Total": 1384,
+    "Interface_Transition_Rate_Percent": 40.9,
+    "Interface_Rigid_Percent": 59.1,
+    "Interface_CS_Percent": 29.62,
+    "Interface_IF_Percent": 11.27,
+    "DeltaE_Mean": 0.003
   },
   {
     "Structural_Class": "B",
     "Class_Name": "Class B (rRNA)",
-    "Interface_Total": 221,
-    "Interface_Transition_Rate_Percent": 46.61,
-    "Interface_Rigid_Percent": 53.39,
-    "Interface_CS_Percent": 28.96,
-    "Interface_IF_Percent": 17.65,
-    "DeltaE_Mean": -0.047
+    "Interface_Total": 176,
+    "Interface_Transition_Rate_Percent": 41.48,
+    "Interface_Rigid_Percent": 58.52,
+    "Interface_CS_Percent": 28.98,
+    "Interface_IF_Percent": 12.5,
+    "DeltaE_Mean": -0.018
   },
   {
     "Structural_Class": "C",
     "Class_Name": "Class C (Duplex-RNA)",
-    "Interface_Total": 1994,
-    "Interface_Transition_Rate_Percent": 42.73,
-    "Interface_Rigid_Percent": 57.27,
-    "Interface_CS_Percent": 28.59,
-    "Interface_IF_Percent": 14.14,
-    "DeltaE_Mean": -0.012
+    "Interface_Total": 1691,
+    "Interface_Transition_Rate_Percent": 45.42,
+    "Interface_Rigid_Percent": 54.58,
+    "Interface_CS_Percent": 32.58,
+    "Interface_IF_Percent": 12.83,
+    "DeltaE_Mean": -0.013
   },
   {
     "Structural_Class": "D",
     "Class_Name": "Class D (ssRNA)",
-    "Interface_Total": 2581,
-    "Interface_Transition_Rate_Percent": 33.59,
-    "Interface_Rigid_Percent": 66.41,
-    "Interface_CS_Percent": 23.17,
-    "Interface_IF_Percent": 10.42,
-    "DeltaE_Mean": 0.0
+    "Interface_Total": 2294,
+    "Interface_Transition_Rate_Percent": 38.27,
+    "Interface_Rigid_Percent": 61.73,
+    "Interface_CS_Percent": 28.9,
+    "Interface_IF_Percent": 9.37,
+    "DeltaE_Mean": -0.002
   }
 ]

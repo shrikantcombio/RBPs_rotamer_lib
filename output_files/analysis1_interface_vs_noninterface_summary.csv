@@ -1,2 +1,2 @@
 Interface_Total,Interface_Changed,Interface_Same,Interface_Transition_Rate_Percent,NonInterface_Total,NonInterface_Changed,NonInterface_Same,NonInterface_Transition_Rate_Percent,Odds_Ratio,Fisher_p_value,Chi2_stat,Chi2_p_value,PDB_Paired_Wilcoxon_p_value
-5858,2925,2933,49.93,53581,20110,33471,37.53,1.6599,1.2104955217294678e-74,341.5522,2.929686747678491e-76,3.0741477860792336e-18
+5545,2285,3260,41.21,50787,14637,36150,28.82,1.7311,2.141781843501864e-77,364.4576,3.01285617420184e-81,9.559794143137667e-21

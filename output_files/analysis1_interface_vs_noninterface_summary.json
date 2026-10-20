@@ -1,15 +1,15 @@
 {
-  "Interface_Total": 5858,
-  "Interface_Changed": 2925,
-  "Interface_Same": 2933,
-  "Interface_Transition_Rate_Percent": 49.93,
-  "NonInterface_Total": 53581,
-  "NonInterface_Changed": 20110,
-  "NonInterface_Same": 33471,
-  "NonInterface_Transition_Rate_Percent": 37.53,
-  "Odds_Ratio": 1.6599,
-  "Fisher_p_value": 1.2104955217294678e-74,
-  "Chi2_stat": 341.5522,
-  "Chi2_p_value": 2.929686747678491e-76,
-  "PDB_Paired_Wilcoxon_p_value": 3.0741477860792336e-18
+  "Interface_Total": 5545,
+  "Interface_Changed": 2285,
+  "Interface_Same": 3260,
+  "Interface_Transition_Rate_Percent": 41.21,
+  "NonInterface_Total": 50787,
+  "NonInterface_Changed": 14637,
+  "NonInterface_Same": 36150,
+  "NonInterface_Transition_Rate_Percent": 28.82,
+  "Odds_Ratio": 1.7311,
+  "Fisher_p_value": 2.141781843501864e-77,
+  "Chi2_stat": 364.4576,
+  "Chi2_p_value": 3.01285617420184e-81,
+  "PDB_Paired_Wilcoxon_p_value": 9.559794143137667e-21
 }

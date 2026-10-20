@@ -1,4 +1,4 @@
 Flexibility_Class,Class_Name,Interface_Total,Interface_Transition_Rate_Percent,Interface_CS_Percent,Interface_IF_Percent,DeltaE_Mean
-R,Rigid (R),3383,35.77,24.36,11.41,0.006
-S,Semi-flexible (S),1396,39.9,27.79,12.11,-0.036
-F,Flexible (F),1518,43.21,28.33,14.89,0.007
+R,Rigid (R),3025,39.34,29.42,9.92,0.013
+S,Semi-flexible (S),1207,42.42,29.66,12.76,-0.047
+F,Flexible (F),1313,44.4,32.52,11.88,-0.007

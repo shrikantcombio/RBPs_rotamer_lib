@@ -1,12 +1,17 @@
 {
-  "Interface_Total": 6200,
-  "Interface_RBP_Library_Recovery_Percent": 82.35,
-  "Interface_PPI_Library_Recovery_Percent": 0.0,
-  "Interface_Recovery_Gain_Percent": 82.35,
-  "NonInterface_Total": 53702,
-  "NonInterface_RBP_Library_Recovery_Percent": 74.07,
-  "NonInterface_PPI_Library_Recovery_Percent": 0.0,
-  "NonInterface_Recovery_Gain_Percent": 74.07,
-  "McNemar_Stat": 5104.0002,
-  "McNemar_p_value": 0.0
+  "Interface_Total": 6137,
+  "Interface_RBP_Library_Recovery_Percent": 38.8,
+  "Interface_PPI_Library_Recovery_Percent": 42.63,
+  "Interface_Recovery_Gain_Percent": -3.83,
+  "NonInterface_Total": 51222,
+  "NonInterface_RBP_Library_Recovery_Percent": 50.6,
+  "NonInterface_PPI_Library_Recovery_Percent": 50.5,
+  "NonInterface_Recovery_Gain_Percent": 0.09,
+  "Interface_RBP_Library_Coverage_Percent": 90.03,
+  "Interface_PPI_Library_Coverage_Percent": 98.5,
+  "Interface_Both_Covered_Total": 5525,
+  "Interface_Both_Covered_RBP_Recovery_Percent": 43.1,
+  "Interface_Both_Covered_PPI_Recovery_Percent": 44.18,
+  "McNemar_Stat": 56.5077,
+  "McNemar_p_value": 5.597760058143439e-14
 }

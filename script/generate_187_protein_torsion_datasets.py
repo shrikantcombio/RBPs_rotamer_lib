@@ -10,23 +10,45 @@ SASA Classification:
   - 'N': Non-interface surface residues (surface exposed outside binding interface, from PRince .sur)
   - 'C': Core buried residues (interior residues without surface exposure)
 
-Outputs:
-  - CSV: /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/output_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.csv
-  - JSON: /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/output_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json
-  - TSV: /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/output_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.tsv
+Bound/unbound pairing:
+  Residues of <C_PDB>_<U_PDB>_C.pdb are paired with <C_PDB>_<U_PDB>_U.pdb by chain order and
+  residue sequence (macromol_torsion.pairing), not by residue label: unbound chains are usually
+  relabelled (5X6B: IJEF vs ABCD) or renumbered (2ZZM).
+
+Missing values:
+  Angles that cannot be computed (missing atoms, chain termini/breaks, no unbound partner) are
+  written as empty (NaN), never 0.0. U_SS is empty when the residue has no unbound partner.
+
+Outputs (paths in utils/paths.py / config/paths.json):
+  - output_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.{csv,tsv,json}
+  - input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv (comma-separated)
+  - output_files/ALL_AA_..._187_pairing_log.csv (per-complex pairing statistics)
 """
 
 import os
 import sys
 import json
+import math
 import logging
 import pandas as pd
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+
+def records_with_null(df):
+    """DataFrame rows as dicts with NaN replaced by None, so json.dump writes valid JSON (null)."""
+    return [{k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in rec.items()}
+            for rec in df.to_dict(orient="records")]
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROTA_ASSIGN_DIR = SCRIPT_DIR / "rota_assign"
+ROOT_DIR = SCRIPT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from utils.paths import get_path
+
+ROTA_ASSIGN_DIR = get_path("rota_assign_dir")
 if str(ROTA_ASSIGN_DIR) not in sys.path:
     sys.path.insert(0, str(ROTA_ASSIGN_DIR))
 
@@ -34,11 +56,15 @@ from macromol_torsion.protein_backbone import ProteinBackboneCalculator
 from macromol_torsion.protein_sidechain import ProteinSidechainCalculator
 from macromol_torsion.dssp import DsspAnalyzer
 from macromol_torsion.structure_reader import StructureReader
+from macromol_torsion.pairing import pair_equal_residues
 
-DATASET_DIR = Path("/home/labuser/my_work/protein_rotamer/RBPs_rotamer_data/PRDBv3_rotamer")
-JSON_PATH = SCRIPT_DIR / "RBPs_rotamer_lib" / "input_files" / "PRDBv3_pdbList_chains.json"
-OUTPUT_DIR = SCRIPT_DIR / "RBPs_rotamer_lib" / "output_files"
-INPUT_FILES_DIR = SCRIPT_DIR / "RBPs_rotamer_lib" / "input_files"
+NAN = float("nan")
+CHI_KEYS = ("CHI1", "CHI2", "CHI3", "CHI4", "CHI5")
+
+DATASET_DIR = get_path("prdbv3_rotamer_dir")
+JSON_PATH = ROOT_DIR / "input_files" / "PRDBv3_pdbList_chains.json"
+OUTPUT_DIR = ROOT_DIR / "output_files"
+INPUT_FILES_DIR = ROOT_DIR / "input_files"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 INPUT_FILES_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,9 +108,10 @@ def calculate_187_dataset():
 
     sc_calc = ProteinSidechainCalculator()
     bb_calc = ProteinBackboneCalculator()
-    dssp = DsspAnalyzer(dssp_binary="/home/labuser/bin/dssp")
+    dssp = DsspAnalyzer(dssp_binary=str(get_path("dssp_bin")))
 
     all_records = []
+    pairing_log = []
     processed_count = 0
 
     for idx, item in enumerate(json_items):
@@ -142,11 +169,20 @@ def calculate_187_dataset():
         for i, lbl in enumerate(u_labels):
             parts = lbl.split()
             if len(parts) >= 3:
-                res_name, chain, seq = parts[0], parts[1], parts[2]
                 u_bb_map[lbl] = {
                     "PHI": u_phi[i], "PSI": u_psi[i], "OMEGA": u_omega[i],
                     "SS": u_ss_map.get(lbl, "L")
                 }
+
+        # Pair bound and unbound residues by chain order and sequence (labels differ)
+        try:
+            pair_map, pair_stats = pair_equal_residues(b_labels, u_labels)
+        except ValueError as e:
+            logging.warning(f"{bound_pdb}_{unbound_pdb}: {e}; unbound values left empty")
+            pair_map, pair_stats = {}, {"paired": 0, "name_mismatch": 0,
+                                         "unpaired_bound": len(b_labels), "chain_length_mismatch": 0}
+        pairing_log.append({"PDB": bound_pdb, "U_PDB": unbound_pdb, "bound_residues": len(b_labels),
+                            "unbound_residues": len(u_labels), **pair_stats})
 
         # 6. Build combined residue records
         for lbl, b_info in b_bb_map.items():
@@ -154,27 +190,20 @@ def calculate_187_dataset():
             chain = b_info["CHAIN"]
             seq = b_info["SEQ"]
 
-            # Bound chi angles lookup
-            b_c1 = b_chis['CHI1'].get(lbl, 0.0)
-            b_c2 = b_chis['CHI2'].get(lbl, 0.0)
-            b_c3 = b_chis['CHI3'].get(lbl, 0.0)
-            b_c4 = b_chis['CHI4'].get(lbl, 0.0)
-            b_c5 = b_chis['CHI5'].get(lbl, 0.0)
+            # Bound chi angles lookup (NaN when the chi cannot be computed)
+            b_c1, b_c2, b_c3, b_c4, b_c5 = (b_chis[k].get(lbl, NAN) for k in CHI_KEYS)
 
-            # Unbound values lookup
-            u_info = u_bb_map.get(lbl)
+            # Unbound values via the paired unbound residue label
+            u_lbl = pair_map.get(lbl)
+            u_info = u_bb_map.get(u_lbl) if u_lbl else None
             if u_info:
                 u_phi_val, u_psi_val, u_omega_val = u_info["PHI"], u_info["PSI"], u_info["OMEGA"]
                 u_ss_val = u_info["SS"]
-                u_c1 = u_chis['CHI1'].get(lbl, 0.0)
-                u_c2 = u_chis['CHI2'].get(lbl, 0.0)
-                u_c3 = u_chis['CHI3'].get(lbl, 0.0)
-                u_c4 = u_chis['CHI4'].get(lbl, 0.0)
-                u_c5 = u_chis['CHI5'].get(lbl, 0.0)
+                u_c1, u_c2, u_c3, u_c4, u_c5 = (u_chis[k].get(u_lbl, NAN) for k in CHI_KEYS)
             else:
-                u_phi_val, u_psi_val, u_omega_val = 0.0, 0.0, 0.0
-                u_ss_val = b_info["SS"]
-                u_c1, u_c2, u_c3, u_c4, u_c5 = 0.0, 0.0, 0.0, 0.0, 0.0
+                u_phi_val = u_psi_val = u_omega_val = NAN
+                u_ss_val = None
+                u_c1 = u_c2 = u_c3 = u_c4 = u_c5 = NAN
 
             # SASA classification logic:
             # - 'I': Interface (in .int)
@@ -216,6 +245,10 @@ def calculate_187_dataset():
             all_records.append(record)
 
     df = pd.DataFrame(all_records)
+    pairing_df = pd.DataFrame(pairing_log)
+    pairing_df.to_csv(OUTPUT_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_pairing_log.csv", index=False)
+    logging.info(f"Pairing: {int(pairing_df.paired.sum())} bound residues paired with an unbound residue, "
+                 f"{int(pairing_df.unpaired_bound.sum())} unpaired, across {len(pairing_df)} complexes")
     logging.info(f"Successfully calculated 187 PRDBv3 protein torsion dataset! Total residues: {len(df)}")
 
     # Export CSV, TSV, and JSON files to output_files/ and input_files/
@@ -226,7 +259,8 @@ def calculate_187_dataset():
     df.to_csv(csv_file, index=False)
     df.to_csv(tsv_file, sep="\t", index=False)
 
-    records_json = df.to_dict(orient="records")
+    # NaN is not valid JSON; write null instead
+    records_json = records_with_null(df)
     with open(json_file, "w") as f_json:
         json.dump(records_json, f_json, indent=2)
 

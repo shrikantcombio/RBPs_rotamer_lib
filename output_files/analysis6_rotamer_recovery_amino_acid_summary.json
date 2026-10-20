@@ -1,164 +1,164 @@
 [
   {
-    "AA": "TRP",
-    "Total_Residues": 32,
-    "RBP_Library_Accuracy_Percent": 100.0,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 100.0,
-    "McNemar_p_value": 4.2513944082491124e-08,
-    "FDR_p_adj": 4.2513944082491124e-08
+    "AA": "MET",
+    "Total_Residues": 119,
+    "RBP_Library_Accuracy_Percent": 13.45,
+    "PPI_Library_Accuracy_Percent": 7.56,
+    "Accuracy_Gain_Percent": 5.88,
+    "McNemar_p_value": 0.23013934044341314,
+    "FDR_p_adj": 0.3452090106651197
   },
   {
     "AA": "CYS",
-    "Total_Residues": 69,
-    "RBP_Library_Accuracy_Percent": 100.0,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 100.0,
-    "McNemar_p_value": 2.6951846369655923e-16,
-    "FDR_p_adj": 3.0320827165862913e-16
-  },
-  {
-    "AA": "PRO",
-    "Total_Residues": 320,
-    "RBP_Library_Accuracy_Percent": 99.06,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 99.06,
-    "McNemar_p_value": 1.77561489157636e-70,
-    "FDR_p_adj": 3.99513350604681e-70
-  },
-  {
-    "AA": "ILE",
-    "Total_Residues": 303,
-    "RBP_Library_Accuracy_Percent": 97.36,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 97.36,
-    "McNemar_p_value": 1.1019357426556582e-65,
-    "FDR_p_adj": 1.9834843367801846e-65
-  },
-  {
-    "AA": "PHE",
-    "Total_Residues": 289,
-    "RBP_Library_Accuracy_Percent": 95.85,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 95.85,
-    "McNemar_p_value": 9.213625391228448e-62,
-    "FDR_p_adj": 1.5076841549282915e-61
-  },
-  {
-    "AA": "HIS",
-    "Total_Residues": 234,
-    "RBP_Library_Accuracy_Percent": 93.59,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 93.59,
-    "McNemar_p_value": 4.071777446628031e-49,
-    "FDR_p_adj": 4.8861329359536375e-49
-  },
-  {
-    "AA": "TYR",
-    "Total_Residues": 336,
-    "RBP_Library_Accuracy_Percent": 93.45,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 93.45,
-    "McNemar_p_value": 7.995559233477854e-70,
-    "FDR_p_adj": 1.5991118466955708e-69
-  },
-  {
-    "AA": "ASN",
-    "Total_Residues": 388,
-    "RBP_Library_Accuracy_Percent": 92.53,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 92.53,
-    "McNemar_p_value": 1.2653954665413326e-79,
-    "FDR_p_adj": 7.592372799247996e-79
-  },
-  {
-    "AA": "ASP",
-    "Total_Residues": 351,
-    "RBP_Library_Accuracy_Percent": 90.88,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 90.88,
-    "McNemar_p_value": 6.511676674034833e-71,
-    "FDR_p_adj": 1.6744311447518142e-70
-  },
-  {
-    "AA": "THR",
-    "Total_Residues": 395,
-    "RBP_Library_Accuracy_Percent": 90.13,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 90.13,
-    "McNemar_p_value": 5.694887917411111e-79,
-    "FDR_p_adj": 2.562699562835e-78
-  },
-  {
-    "AA": "VAL",
-    "Total_Residues": 307,
-    "RBP_Library_Accuracy_Percent": 88.27,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 88.27,
-    "McNemar_p_value": 1.8709066812117603e-60,
-    "FDR_p_adj": 2.8063600218176403e-60
-  },
-  {
-    "AA": "LEU",
-    "Total_Residues": 385,
-    "RBP_Library_Accuracy_Percent": 87.01,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 87.01,
-    "McNemar_p_value": 2.131778283113546e-74,
-    "FDR_p_adj": 6.395334849340638e-74
-  },
-  {
-    "AA": "GLN",
-    "Total_Residues": 302,
-    "RBP_Library_Accuracy_Percent": 75.17,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 75.17,
-    "McNemar_p_value": 7.325707447382558e-51,
-    "FDR_p_adj": 9.418766718063289e-51
-  },
-  {
-    "AA": "MET",
-    "Total_Residues": 76,
-    "RBP_Library_Accuracy_Percent": 73.68,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 73.68,
-    "McNemar_p_value": 1.9867575986578073e-13,
-    "FDR_p_adj": 2.1036256926965019e-13
-  },
-  {
-    "AA": "GLU",
-    "Total_Residues": 354,
-    "RBP_Library_Accuracy_Percent": 70.9,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 70.9,
-    "McNemar_p_value": 4.281360867662168e-56,
-    "FDR_p_adj": 5.928038124455309e-56
+    "Total_Residues": 75,
+    "RBP_Library_Accuracy_Percent": 26.67,
+    "PPI_Library_Accuracy_Percent": 24.0,
+    "Accuracy_Gain_Percent": 2.67,
+    "McNemar_p_value": 0.8711314915971582,
+    "FDR_p_adj": 0.9800229280468029
   },
   {
     "AA": "ARG",
-    "Total_Residues": 845,
-    "RBP_Library_Accuracy_Percent": 70.53,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 70.53,
-    "McNemar_p_value": 3.3767015549852665e-131,
-    "FDR_p_adj": 6.07806279897348e-130
+    "Total_Residues": 831,
+    "RBP_Library_Accuracy_Percent": 13.48,
+    "PPI_Library_Accuracy_Percent": 12.88,
+    "Accuracy_Gain_Percent": 0.6,
+    "McNemar_p_value": 0.6715664317280816,
+    "FDR_p_adj": 0.8634425550789621
   },
   {
-    "AA": "SER",
-    "Total_Residues": 490,
-    "RBP_Library_Accuracy_Percent": 69.8,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 69.8,
-    "McNemar_p_value": 6.371384451152034e-76,
-    "FDR_p_adj": 2.293698402414732e-75
+    "AA": "PRO",
+    "Total_Residues": 316,
+    "RBP_Library_Accuracy_Percent": 35.76,
+    "PPI_Library_Accuracy_Percent": 35.44,
+    "Accuracy_Gain_Percent": 0.32,
+    "McNemar_p_value": 1.0,
+    "FDR_p_adj": 1.0
+  },
+  {
+    "AA": "ILE",
+    "Total_Residues": 297,
+    "RBP_Library_Accuracy_Percent": 53.54,
+    "PPI_Library_Accuracy_Percent": 53.87,
+    "Accuracy_Gain_Percent": -0.34,
+    "McNemar_p_value": 1.0,
+    "FDR_p_adj": 1.0
+  },
+  {
+    "AA": "PHE",
+    "Total_Residues": 286,
+    "RBP_Library_Accuracy_Percent": 56.64,
+    "PPI_Library_Accuracy_Percent": 58.39,
+    "Accuracy_Gain_Percent": -1.75,
+    "McNemar_p_value": 0.7226325905834432,
+    "FDR_p_adj": 0.8671591087001319
+  },
+  {
+    "AA": "VAL",
+    "Total_Residues": 299,
+    "RBP_Library_Accuracy_Percent": 68.9,
+    "PPI_Library_Accuracy_Percent": 71.24,
+    "Accuracy_Gain_Percent": -2.34,
+    "McNemar_p_value": 0.348736660138805,
+    "FDR_p_adj": 0.48286614480757617
   },
   {
     "AA": "LYS",
-    "Total_Residues": 724,
-    "RBP_Library_Accuracy_Percent": 65.06,
-    "General_SSD_Library_Accuracy_Percent": 0.0,
-    "Accuracy_Gain_Percent": 65.06,
-    "McNemar_p_value": 5.2834123173018225e-104,
-    "FDR_p_adj": 4.75507108557164e-103
+    "Total_Residues": 677,
+    "RBP_Library_Accuracy_Percent": 11.96,
+    "PPI_Library_Accuracy_Percent": 14.92,
+    "Accuracy_Gain_Percent": -2.95,
+    "McNemar_p_value": 0.0033704314473977145,
+    "FDR_p_adj": 0.013141563855990765
+  },
+  {
+    "AA": "THR",
+    "Total_Residues": 386,
+    "RBP_Library_Accuracy_Percent": 67.88,
+    "PPI_Library_Accuracy_Percent": 71.5,
+    "Accuracy_Gain_Percent": -3.63,
+    "McNemar_p_value": 0.0036504344044418794,
+    "FDR_p_adj": 0.013141563855990765
+  },
+  {
+    "AA": "TYR",
+    "Total_Residues": 329,
+    "RBP_Library_Accuracy_Percent": 65.96,
+    "PPI_Library_Accuracy_Percent": 70.52,
+    "Accuracy_Gain_Percent": -4.56,
+    "McNemar_p_value": 0.01796047752607879,
+    "FDR_p_adj": 0.03232885954694183
+  },
+  {
+    "AA": "ASN",
+    "Total_Residues": 384,
+    "RBP_Library_Accuracy_Percent": 55.21,
+    "PPI_Library_Accuracy_Percent": 59.9,
+    "Accuracy_Gain_Percent": -4.69,
+    "McNemar_p_value": 0.014137969455911475,
+    "FDR_p_adj": 0.02827593891182295
+  },
+  {
+    "AA": "GLN",
+    "Total_Residues": 294,
+    "RBP_Library_Accuracy_Percent": 26.87,
+    "PPI_Library_Accuracy_Percent": 31.63,
+    "Accuracy_Gain_Percent": -4.76,
+    "McNemar_p_value": 0.007963489206550003,
+    "FDR_p_adj": 0.019496017633556476
+  },
+  {
+    "AA": "LEU",
+    "Total_Residues": 378,
+    "RBP_Library_Accuracy_Percent": 52.65,
+    "PPI_Library_Accuracy_Percent": 57.41,
+    "Accuracy_Gain_Percent": -4.76,
+    "McNemar_p_value": 0.004606532263391753,
+    "FDR_p_adj": 0.013819596790175257
+  },
+  {
+    "AA": "HIS",
+    "Total_Residues": 246,
+    "RBP_Library_Accuracy_Percent": 35.77,
+    "PPI_Library_Accuracy_Percent": 41.46,
+    "Accuracy_Gain_Percent": -5.69,
+    "McNemar_p_value": 0.20239601597295517,
+    "FDR_p_adj": 0.33119348068301757
+  },
+  {
+    "AA": "GLU",
+    "Total_Residues": 336,
+    "RBP_Library_Accuracy_Percent": 21.43,
+    "PPI_Library_Accuracy_Percent": 27.98,
+    "Accuracy_Gain_Percent": -6.55,
+    "McNemar_p_value": 0.0086648967260251,
+    "FDR_p_adj": 0.019496017633556476
+  },
+  {
+    "AA": "SER",
+    "Total_Residues": 468,
+    "RBP_Library_Accuracy_Percent": 45.09,
+    "PPI_Library_Accuracy_Percent": 51.71,
+    "Accuracy_Gain_Percent": -6.62,
+    "McNemar_p_value": 0.0008581206663936758,
+    "FDR_p_adj": 0.0051487239983620545
+  },
+  {
+    "AA": "ASP",
+    "Total_Residues": 350,
+    "RBP_Library_Accuracy_Percent": 48.57,
+    "PPI_Library_Accuracy_Percent": 59.43,
+    "Accuracy_Gain_Percent": -10.86,
+    "McNemar_p_value": 0.0001858114946938232,
+    "FDR_p_adj": 0.0016723034522444088
+  },
+  {
+    "AA": "TRP",
+    "Total_Residues": 66,
+    "RBP_Library_Accuracy_Percent": 3.03,
+    "PPI_Library_Accuracy_Percent": 53.03,
+    "Accuracy_Gain_Percent": -50.0,
+    "McNemar_p_value": 2.5403120142884262e-08,
+    "FDR_p_adj": 4.572561625719167e-07
   }
 ]
