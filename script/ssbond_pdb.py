@@ -36,10 +36,7 @@ if str(ROOT_DIR) not in sys.path:
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-try:
-    from script.utils.mmcif_clean_reader import parse_file
-except ImportError:
-    from utils.mmcif_clean_reader import parse_file
+from utils.mmcif_clean_reader import parse_file
 
 
 class DisulfideBondCalculator:
@@ -242,8 +239,8 @@ class DisulfideBondCalculator:
         path = Path(file_path)
         cysteines = []
 
+        cysteines = []
         try:
-            from script.utils.mmcif_clean_reader import parse_file
             cols, rows = parse_file(str(path))
             res_dict = {}
             for r in rows:

@@ -43,10 +43,7 @@ if str(ROOT_DIR) not in sys.path:
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-try:
-    from script.utils.mmcif_clean_reader import parse_file
-except ImportError:
-    from utils.mmcif_clean_reader import parse_file
+from utils.mmcif_clean_reader import parse_file
 
 try:
     import seaborn as sns
@@ -169,7 +166,7 @@ class RamachandranPlot:
     def extract_angles_from_structure_file(self, file_path):
         """
         Extract Phi and Psi backbone angles from a single PDB or mmCIF structure file
-        using script/utils/mmcif_clean_reader.py.
+        using utils/mmcif_clean_reader.py.
         """
         file_path = Path(file_path)
         residue_angle_records = []
