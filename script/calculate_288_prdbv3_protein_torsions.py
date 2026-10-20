@@ -7,14 +7,14 @@ bound protein backbone, side-chain torsion angles, DSSP secondary structure, and
 interface classifications.
 
 Inputs:
-  - Dataset Directory: /home/labuser/Projects/results/nr_288_PRDBv3.0
-  - JSON List: /home/labuser/Projects/results/nr_288_PRDBv3.0/nr_PRDBv3.0_288_List.json
-  - CIF Files: /home/labuser/Projects/results/nr_288_PRDBv3.0/cif_files
+  - Dataset Directory: paths.nr288_dir (utils/paths.py)
+  - JSON List: <nr288_dir>/nr_PRDBv3.0_288_List.json
+  - CIF Files: <nr288_dir>/cif_files
 
 Outputs:
-  - CSV: /home/labuser/Projects/results/nr_288_PRDBv3.0/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.csv
-  - TSV: /home/labuser/Projects/results/nr_288_PRDBv3.0/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.tsv
-  - JSON: /home/labuser/Projects/results/nr_288_PRDBv3.0/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.json
+  - CSV: <nr288_dir>/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.csv
+  - TSV: <nr288_dir>/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.tsv
+  - JSON: <nr288_dir>/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_288.json
 """
 
 import os
@@ -27,14 +27,17 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-BASE_DIR = Path("/home/labuser/Projects/results/nr_288_PRDBv3.0")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.paths import get_path
+
+BASE_DIR = get_path("nr288_dir")
 JSON_LIST_PATH = BASE_DIR / "nr_PRDBv3.0_288_List.json"
 CIF_DIR = BASE_DIR / "cif_files"
 PRINCE_OUT_DIR = BASE_DIR / "prince_out"
-PRINCE_BIN = Path("/home/labuser/Projects/PRince/bin/prince")
+PRINCE_BIN = get_path("prince_bin")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROTA_ASSIGN_DIR = SCRIPT_DIR.parent.parent / "rota_assign"
+ROTA_ASSIGN_DIR = get_path("rota_assign_dir")
 if str(ROTA_ASSIGN_DIR) not in sys.path:
     sys.path.insert(0, str(ROTA_ASSIGN_DIR))
 
@@ -90,7 +93,7 @@ def main():
 
     sc_calc = ProteinSidechainCalculator()
     bb_calc = ProteinBackboneCalculator()
-    dssp = DsspAnalyzer(dssp_binary="/home/labuser/bin/dssp")
+    dssp = DsspAnalyzer(dssp_binary=str(get_path("dssp_bin")))
 
     all_records = []
     processed_count = 0
@@ -151,11 +154,11 @@ def main():
                     continue
 
                 # Sidechain Chi angles
-                c1 = chis['CHI1'].get(lbl, 0.0)
-                c2 = chis['CHI2'].get(lbl, 0.0)
-                c3 = chis['CHI3'].get(lbl, 0.0)
-                c4 = chis['CHI4'].get(lbl, 0.0)
-                c5 = chis['CHI5'].get(lbl, 0.0)
+                c1 = chis['CHI1'].get(lbl, float('nan'))
+                c2 = chis['CHI2'].get(lbl, float('nan'))
+                c3 = chis['CHI3'].get(lbl, float('nan'))
+                c4 = chis['CHI4'].get(lbl, float('nan'))
+                c5 = chis['CHI5'].get(lbl, float('nan'))
 
                 # Secondary structure
                 ss_val = ss_map.get(lbl, "L")

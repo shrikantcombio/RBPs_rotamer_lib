@@ -31,25 +31,27 @@ def records_with_null(df):
             for rec in df.to_dict(orient="records")]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent # /home/labuser/Projects/PhD_projects/RBPs_rotamer_lib
-BASE_DIR = ROOT_DIR.parent   # /home/labuser/Projects/PhD_projects
+ROOT_DIR = SCRIPT_DIR.parent
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+
+sys.path.insert(0, str(ROOT_DIR))
+from utils.paths import get_path
 
 from backbone_dependent_rotamer_lib import BackboneDependentRotamerLibrary
 from backbone_independent_rotamer_lib import BackboneIndependentRotamerLibrary
 
 # Dataset paths
 RBP_CLEAN_TSV = ROOT_DIR / "input_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-PPI_UNBOUND1_CSV = BASE_DIR / "protein-protein" / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND1_257.csv"
-PPI_UNBOUND2_CSV = BASE_DIR / "protein-protein" / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND2_257.csv"
+PPI_UNBOUND1_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND1_257.csv"
+PPI_UNBOUND2_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND2_257.csv"
 
 # Output directory paths
 RBP_BBD_OUT_DIR = ROOT_DIR / "RBPs_BBD_rotamer_lib"
 RBP_BBI_OUT_DIR = ROOT_DIR / "RBPs_BBI_rotamer_lib"
-PPI_UNBOUND1_OUT_DIR = BASE_DIR / "protein-protein" / "library" / "unbound1"
-PPI_UNBOUND2_OUT_DIR = BASE_DIR / "protein-protein" / "library" / "unbound2"
+PPI_UNBOUND1_OUT_DIR = get_path("protein_protein_dir") / "library" / "unbound1"
+PPI_UNBOUND2_OUT_DIR = get_path("protein_protein_dir") / "library" / "unbound2"
 
 for d in [RBP_BBD_OUT_DIR, RBP_BBI_OUT_DIR, PPI_UNBOUND1_OUT_DIR, PPI_UNBOUND2_OUT_DIR]:
     d.mkdir(parents=True, exist_ok=True)

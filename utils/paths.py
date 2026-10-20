@@ -19,6 +19,10 @@ DEFAULTS = {
     "rota_assign_dir": "../rota_assign",
     # DSSP executable
     "dssp_bin": "dssp",
+    # Non-redundant 288-complex PRDBv3 set (calculate_288_prdbv3_protein_torsions.py)
+    "nr288_dir": "data/nr_288_PRDBv3.0",
+    # PRince executable
+    "prince_bin": "prince",
     # protein-protein project (PPI libraries in derive_all_updated_rotamer_libraries.py)
     "protein_protein_dir": "../protein-protein",
 }

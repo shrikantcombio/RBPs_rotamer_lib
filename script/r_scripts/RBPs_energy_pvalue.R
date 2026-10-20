@@ -25,7 +25,10 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-json_file <- if (length(args) >= 1) args[1] else "/home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/output_files/torsion_potential_energy_summary_187.json"
+# Repository root: two levels above this script (script/r_scripts/)
+script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+repo_dir <- if (length(script_arg)) normalizePath(file.path(dirname(sub("^--file=", "", script_arg)), "..", "..")) else getwd()
+json_file <- if (length(args) >= 1) args[1] else file.path(repo_dir, "output_files", "torsion_potential_energy_summary_187.json")
 region_mode <- if (length(args) >= 2) toupper(args[2]) else "INT"
 
 if (!file.exists(json_file)) {
@@ -39,8 +42,8 @@ cat("Processing JSON data file:", json_file, "(Region Mode:", region_mode, ")\n"
 data_list <- jsonlite::fromJSON(json_file)
 df_raw <- as.data.frame(data_list)
 
-fig_dir1 <- "/home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/figure/energy_pvalues"
-fig_dir2 <- "/home/labuser/Projects/PhD_projects/RBPs_rotamer_lib/figures/energy_pvalues"
+fig_dir1 <- file.path(repo_dir, "figure", "energy_pvalues")
+fig_dir2 <- file.path(repo_dir, "figures", "energy_pvalues")
 dir.create(fig_dir1, showWarnings = FALSE, recursive = TRUE)
 dir.create(fig_dir2, showWarnings = FALSE, recursive = TRUE)
 
