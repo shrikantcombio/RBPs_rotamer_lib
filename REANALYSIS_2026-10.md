@@ -38,6 +38,43 @@ parity when a PRince file is missing (43 residues; the label was not used in any
 In the BBI unbound library the most probable rotamer changed for 8 of 18 amino acids; bound top
 rotamers are unchanged. Rerunning the dataset and library scripts reproduces all 49 files byte for byte.
 
+### 2a. v2 libraries: terminal sp2 chis (branch `fix/sp2-terminal-chi-rotamers`)
+
+The libraries above (v1) binned every chi into three 120° bins. For the planar terminal group of ASP,
+GLU, PHE, TYR, ASN, GLN, HIS and TRP this created rotamers that are not distinct conformations:
+PHE/TYR χ2 was folded into [−90°, 90°), whose boundary lies on the most populated ring orientation
+(±90°), so one rotamer was reported as two (BBI bound PHE "m −70°" P = 0.38 and "m +79°" P = 0.17 are
+the same ring orientation); the 0° edge split the single ASP χ2 / GLU χ3 peak (+27° / −30° pairs), and
+the TRP χ2 mode near 0°. v2 bins these chis by residue-specific ranges at density minima and computes
+statistics of symmetric groups on doubled angles (README, "Terminal sp2 chis"). Other residues are
+unchanged, apart from 21 bound / 27 unbound BBD cells (|ΔP| ≤ 0.05) affected by the corrected
+backbone-bin edges (ties at exact bin edges, 165° labelled 180°).
+
+v1 files are kept unchanged in `RBPs_BBD_rotamer_lib/`, `RBPs_BBI_rotamer_lib/` and
+`protein-protein/library/`; v2 is in the `_v2` directories.
+
+| Library | Rows v1 → v2 |
+|---|---|
+| BBD bound / unbound (all residues) | 1,732 → 1,542 / 1,718 → 1,552 |
+| BBI bound / unbound (all residues) | 242 → 209 / 248 → 213 |
+
+Most probable BBI bound rotamer (terminal χ shown as an angle; PHE/TYR χ2 100° ≡ −80°):
+
+| AA | Rotamers v1 → v2 | Top v1 (P) | Top v2 (P) |
+|---|---|---|---|
+| ASN | 9 → 6 | m-40 (0.40) | m-36 (0.46) |
+| ASP | 6 → 3 | m-30 (0.42) | m-24 (0.52) |
+| GLN | 23 → 9 | mt-42 (0.17) | mt-4 (0.37) |
+| GLU | 17 → 9 | mt-31 (0.17) | mt-2 (0.34) |
+| HIS | 9 → 9 | m-72 (0.29) | m-72 (0.29) |
+| PHE | 6 → 3 | m-70 (0.38) | m100 (0.55) |
+| TRP | 8 → 9 | m94 (0.32) | m99 (0.30) |
+| TYR | 6 → 3 | m-70 (0.36) | m100 (0.52) |
+
+Analyses 1–4 compare only the letter part of rotamer names (sp3 chis), but the names come from
+rota_assign's own copy of the libraries (still v1); they are to be rerun once rota_assign uses v2.
+Analysis 6 predicts the most probable library row and must be rerun with v2.
+
 ## 3. Results
 
 ### Analysis 1 — interface vs non-interface rotamer transitions

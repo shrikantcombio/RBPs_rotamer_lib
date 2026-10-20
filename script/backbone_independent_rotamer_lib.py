@@ -10,7 +10,8 @@ import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from scipy.stats import vonmises
+
+import rotamer_definitions as rotdef
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -20,21 +21,10 @@ class BackboneIndependentRotamerLibrary:
     Class for calculating backbone-independent rotamer libraries.
     """
 
-    RESIDUE_CHI_COUNTS = {
-        "ARG": 4, "LYS": 4, "GLU": 3, "GLN": 3, "MET": 3,
-        "ASP": 2, "ASN": 2, "HIS": 2, "LEU": 2, "ILE": 2,
-        "PHE": 2, "PRO": 2, "TRP": 2, "TYR": 2,
-        "CYS": 1, "SER": 1, "THR": 1, "VAL": 1
-    }
-
-    # Residues with symmetric terminal chi angles (180-degree periodicity).
-    # Key: residue name -> 0-based index of the symmetric chi.
-    SYMMETRIC_CHI = {
-        "ASP": 1,
-        "GLU": 2,
-        "PHE": 1,
-        "TYR": 1,
-    }
+    RESIDUE_CHI_COUNTS = rotdef.RESIDUE_CHI_COUNTS
+    # Terminal sp2 chis use residue-specific bins and, for two-fold symmetric groups,
+    # 180-degree periodic statistics: see rotamer_definitions.py
+    TERMINAL_SP2_CHI = rotdef.TERMINAL_SP2_CHI
 
     def __init__(self, rot_bin_lib=None, min_count=5):
         """
@@ -48,67 +38,9 @@ class BackboneIndependentRotamerLibrary:
         self.rot_bin_lib = rot_bin_lib if rot_bin_lib is not None else {}
         self.min_count = min_count
 
-    @staticmethod
-    def fold_symmetric_chi(angle):
-        """
-        Canonicalize a symmetric terminal chi angle into [-90, 90).
-        Applies to ASP chi2, GLU chi3, PHE chi2, TYR chi2.
-        Matches Dunbrack 2011 and Richardson/MolProbity conventions.
-        """
-        if angle >= 90.0:
-            return angle - 180.0
-        if angle < -90.0:
-            return angle + 180.0
-        return angle
-
-    @staticmethod
-    def rotameric_class(angle, n_splits=3):
-        if n_splits == 3:
-            if 0 < angle <= 120:
-                return 0
-            elif -120 < angle <= 0:
-                return 2
-            return 1
-        elif n_splits == 4:
-            if 45 < angle <= 135:
-                return 0
-            elif -123 < angle <= -45:
-                return 2
-            elif angle > 135 or angle <= -135:
-                return 1
-            return 3
-        elif n_splits == 6:
-            if -30 < angle <= 30:
-                return 0
-            elif 30 < angle <= 90:
-                return 1
-            elif 90 < angle <= 150:
-                return 2
-            elif angle > 150 or angle <= -150:
-                return 3
-            elif -150 < angle <= -90:
-                return 4
-            return 5
-        return 0 if 0 < angle <= 120 else (2 if -120 < angle <= 0 else 1)
-
-    @staticmethod
-    def weighted_circmean(angles_rad, weights):
-        angles_arr = np.array(angles_rad)
-        weights_arr = np.array(weights)
-        complex_numbers = np.exp(1j * angles_arr)
-        weighted_sum = np.sum(weights_arr * complex_numbers)
-        return float(np.angle(weighted_sum))
-
-    @staticmethod
-    def weighted_circstd(angles_rad, weights, mean_angle_rad):
-        angles_arr = np.array(angles_rad)
-        weights_arr = np.array(weights)
-        angle_diffs = np.angle(np.exp(1j * (angles_arr - mean_angle_rad)))
-        sum_w = np.sum(weights_arr)
-        if sum_w <= 0:
-            return 0.0
-        weighted_variance = np.sum(weights_arr * (angle_diffs ** 2)) / sum_w
-        return float(np.sqrt(max(0.0, weighted_variance)))
+    rotameric_class = staticmethod(rotdef.rotameric_class)
+    weighted_circmean = staticmethod(rotdef.weighted_circmean)
+    weighted_circstd = staticmethod(rotdef.weighted_circstd)
 
     def generate_library(self, df, state="B", sasa_filter=None, residues=None):
         if residues is None:
@@ -130,30 +62,17 @@ class BackboneIndependentRotamerLibrary:
             if len(res_data) == 0:
                 continue
 
-            # Build per-depth valid masks: cumulative non-null across chi_1..chi_n.
-            # A residue with missing chi_k contributes to depths 1..(k-1) only.
-            # For rotamer-state classification and probability, use only residues
-            # where ALL chi are non-null (deepest valid population).
-            depth_valid_mask = np.ones(len(res_data), dtype=bool)
-            for n in range(nchi):
-                depth_valid_mask = depth_valid_mask & res_data[chi_cols[n]].notna().values
-            res_data_full = res_data[depth_valid_mask]
+            # Working population: residues with every chi present (truncated side chains have NaN chis)
+            full_valid_mask = np.ones(len(res_data), dtype=bool)
+            for col in chi_cols:
+                full_valid_mask &= res_data[col].notna().values
+            res_data_full = res_data[full_valid_mask]
 
             if len(res_data_full) == 0:
                 continue
 
-            sym_chi_idx = self.SYMMETRIC_CHI.get(aa, None)
-            chi_classes = []
-            for n in range(nchi):
-                col = chi_cols[n]
-                n_splits = self.rot_bin_lib.get((aa, n), 3)
-                if sym_chi_idx is not None and n == sym_chi_idx:
-                    angles = res_data_full[col].apply(self.fold_symmetric_chi)
-                else:
-                    angles = res_data_full[col]
-                chi_classes.append(angles.apply(lambda x: self.rotameric_class(x, n_splits)).values)
-
-            effect_chi_classes = np.array(chi_classes)
+            # Rotamer bin of every chi (terminal sp2 chis use residue-specific bins)
+            effect_chi_classes = rotdef.classify_chis(aa, res_data_full, chi_cols, self.rot_bin_lib)
             if effect_chi_classes.size == 0:
                 continue
 
@@ -170,6 +89,7 @@ class BackboneIndependentRotamerLibrary:
                 if count_each < self.min_count:
                     continue
 
+                # Denominator includes rotamers dropped for count < min_count
                 prob = float(count_each) / float(total_count)
                 angles_sub = res_data_full[mask]
 
@@ -179,24 +99,9 @@ class BackboneIndependentRotamerLibrary:
                 line[2] = prob
 
                 for n in range(nchi):
-                    chi_col_name = chi_cols[n]
-                    raw_angles = angles_sub[chi_col_name].values
-                    # Fold symmetric terminal chi before computing circular statistics.
-                    if sym_chi_idx is not None and n == sym_chi_idx:
-                        raw_angles = np.array([self.fold_symmetric_chi(a) for a in raw_angles])
-                    ang_rad = np.radians(raw_angles)
-
-                    try:
-                        kappa, loc, _ = vonmises.fit(ang_rad, fscale=1)
-                        weights = vonmises(loc=loc, kappa=kappa).pdf(ang_rad)
-                    except Exception:
-                        weights = np.ones_like(ang_rad)
-
-                    wm_rad = self.weighted_circmean(ang_rad, weights)
-                    wstd_rad = self.weighted_circstd(ang_rad, weights, wm_rad)
-
-                    line[3 + n] = np.degrees(wm_rad)
-                    line[3 + n + nchi] = np.degrees(wstd_rad)
+                    mean_deg, sigma_deg = rotdef.chi_mean_and_sigma(aa, n, angles_sub[chi_cols[n]].values)
+                    line[3 + n] = mean_deg
+                    line[3 + n + nchi] = sigma_deg
 
                 results.append(line)
 

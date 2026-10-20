@@ -7,11 +7,16 @@ for Protein-RNA (RBPs) and Protein-Protein (PPI) complexes using verified datase
 
 Outputs clean, unified CSV, TSV, and JSON files for all amino acids (without individual .lib files).
 
-Output Directories:
-  - RBPs BBD: RBPs_rotamer_lib/RBPs_BBD_rotamer_lib/
-  - RBPs BBI: RBPs_rotamer_lib/RBPs_BBI_rotamer_lib/
-  - PPI Unbound 1: protein-protein/library/unbound1/
-  - PPI Unbound 2: protein-protein/library/unbound2/
+Output Directories (LIBRARY_VERSION = "v2"):
+  - RBPs BBD: RBPs_rotamer_lib/RBPs_BBD_rotamer_lib_v2/
+  - RBPs BBI: RBPs_rotamer_lib/RBPs_BBI_rotamer_lib_v2/
+  - PPI Unbound 1: protein-protein/library_v2/unbound1/
+  - PPI Unbound 2: protein-protein/library_v2/unbound2/
+
+v2 bins the terminal sp2 chi of ASP/GLU/PHE/TYR/ASN/GLN/HIS/TRP by residue-specific ranges
+(rotamer_definitions.py). The v1 libraries (RBPs_BBD_rotamer_lib/, RBPs_BBI_rotamer_lib/,
+protein-protein/library/) used three 120-degree bins for every chi; they are kept unchanged and
+are no longer written by this script.
 """
 
 import os
@@ -48,10 +53,11 @@ PPI_UNBOUND1_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BA
 PPI_UNBOUND2_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND2_257.csv"
 
 # Output directory paths
-RBP_BBD_OUT_DIR = ROOT_DIR / "RBPs_BBD_rotamer_lib"
-RBP_BBI_OUT_DIR = ROOT_DIR / "RBPs_BBI_rotamer_lib"
-PPI_UNBOUND1_OUT_DIR = get_path("protein_protein_dir") / "library" / "unbound1"
-PPI_UNBOUND2_OUT_DIR = get_path("protein_protein_dir") / "library" / "unbound2"
+LIBRARY_VERSION = "v2"
+RBP_BBD_OUT_DIR = ROOT_DIR / f"RBPs_BBD_rotamer_lib_{LIBRARY_VERSION}"
+RBP_BBI_OUT_DIR = ROOT_DIR / f"RBPs_BBI_rotamer_lib_{LIBRARY_VERSION}"
+PPI_UNBOUND1_OUT_DIR = get_path("protein_protein_dir") / f"library_{LIBRARY_VERSION}" / "unbound1"
+PPI_UNBOUND2_OUT_DIR = get_path("protein_protein_dir") / f"library_{LIBRARY_VERSION}" / "unbound2"
 
 for d in [RBP_BBD_OUT_DIR, RBP_BBI_OUT_DIR, PPI_UNBOUND1_OUT_DIR, PPI_UNBOUND2_OUT_DIR]:
     d.mkdir(parents=True, exist_ok=True)

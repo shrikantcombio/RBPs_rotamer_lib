@@ -8,7 +8,9 @@ A high-precision, circular-statistics-derived backbone-dependent (BBD) and backb
 
 ```text
 RBPs_rotamer_lib/
-├── RBPs_BBD_rotamer_lib/         # Backbone-Dependent (30° x 30° Phi/Psi bins) Libraries
+├── RBPs_BBD_rotamer_lib_v2/      # Current BBD libraries (v2, same file names as below)
+├── RBPs_BBI_rotamer_lib_v2/      # Current BBI libraries (v2, same file names as below)
+├── RBPs_BBD_rotamer_lib/         # v1 Backbone-Dependent (30° x 30° Phi/Psi bins) Libraries, kept unchanged
 │   ├── RBPs_I_bbd_B_rotamer_lib.[csv|tsv|json]   # Bound Interface (I)
 │   ├── RBPs_I_bbd_U_rotamer_lib.[csv|tsv|json]   # Unbound Interface (I)
 │   ├── RBPs_N_bbd_B_rotamer_lib.[csv|tsv|json]   # Bound Non-Interface Surface (N)
@@ -17,7 +19,7 @@ RBPs_rotamer_lib/
 │   ├── RBPs_S_bbd_U_rotamer_lib.[csv|tsv|json]   # Unbound Surface (S = I + N)
 │   ├── RBPs_bbd_B_rotamer_lib.[csv|tsv|json]     # Bound, all residues (I + N + C)
 │   └── RBPs_bbd_U_rotamer_lib.[csv|tsv|json]     # Unbound, all residues (I + N + C)
-├── RBPs_BBI_rotamer_lib/         # Backbone-Independent (Global) Libraries
+├── RBPs_BBI_rotamer_lib/         # v1 Backbone-Independent (Global) Libraries, kept unchanged
 │   ├── RBPs_I_bbi_B_rotamer_lib.[csv|tsv|json]   # Bound Interface (I)
 │   ├── RBPs_I_bbi_U_rotamer_lib.[csv|tsv|json]   # Unbound Interface (I)
 │   ├── RBPs_N_bbi_B_rotamer_lib.[csv|tsv|json]   # Bound Non-Interface Surface (N)
@@ -53,10 +55,28 @@ Residues are categorized based on surface accessibility and interface burial usi
 
 ### 3. Depth-Valid Sample Masking & Symmetry Folding
 - **Multi-Chi Depth Validation**: Residues with missing terminal atoms are validated up to their deepest non-null chi depth, ensuring partial sidechains contribute accurately without introducing `NaN` binning artifacts.
-- **Symmetric Planar Ring Folding**: Symmetric terminal chi angles ($\text{ASP }\chi_2$, $\text{GLU }\chi_3$, $\text{PHE }\chi_2$, $\text{TYR }\chi_2$) are folded into $[ -90^\circ, 90^\circ )$ prior to rotamer binning to avoid splitting chemically identical conformations into separate states.
+- **Terminal sp2 chis (v2)**: the last chi of ASP, GLU, PHE, TYR, ASN, GLN, HIS and TRP rotates a planar
+  group and has no staggered minima, so it is binned by residue-specific ranges whose edges lie at density
+  minima (`script/rotamer_definitions.py`, following Dunbrack 2010/2011 and Lovell et al. 2000):
+
+  | Residue χ | Period | Canonical range | Bins (edges) | Modes |
+  |---|---|---|---|---|
+  | ASP χ2, GLU χ3 | 180° | [−90°, 90°) | 1 | ~0° |
+  | PHE χ2, TYR χ2 | 180° | [−30°, 150°) | 1 | ~90° |
+  | HIS χ2 | 360° | — | 3 (−120°, 0°, 120°) | ~−75°, ~75°, ~170° |
+  | TRP χ2 | 360° | — | 3 (−50°, 50°, 180°) | ~−100°, ~0°, ~90° |
+  | ASN χ2 | 360° | — | 2 (−150°, 60°) | ~−30°, ~120° |
+  | GLN χ3 | 360° | — | 1 | broad |
+
+  For the two-fold symmetric groups (OD1/OD2, OE1/OE2, ring flip) the mean and σ are computed on doubled
+  angles, so x and x + 180° are the same conformation. In v1 every chi used the three 120° bins after
+  folding symmetric chis into [−90°, 90°): the fold boundary fell on the most populated PHE/TYR ring
+  orientation (±90°) and the 0° edge split the single ASP χ2 / GLU χ3 peak, so these residues had
+  roughly twice as many rotamers as real conformations (e.g. BBI PHE: 6 rows in v1, 3 in v2).
 
 ### 4. Von Mises Kernel-Weighted Circular Statistics
-- **Grid Binning**: Backbone $(\Phi, \Psi)$ angles are binned into $30^\circ \times 30^\circ$ grid cells centered at $[-180^\circ, -150^\circ, \dots, +150^\circ]$.
+- **Grid Binning**: Backbone $(\Phi, \Psi)$ angles are binned into $30^\circ \times 30^\circ$ grid cells centered at $[-180^\circ, -150^\circ, \dots, +150^\circ]$; each cell is $[g - 15^\circ, g + 15^\circ)$ (v1 rounded ties to even and labelled 165° as 180°).
+- **Probabilities**: `PROB` = rotamer count / all residues in the cell (BBD) or of the residue type (BBI). Rotamers with fewer than 5 observations are not reported, so the probabilities of a cell can sum to less than 1.
 - **Rotamer States**: Sidechain $\chi$ angles are binned into standard staggered states ($p / g^+$ at $+60^\circ$, $t$ at $180^\circ$, $m / g^-$ at $-60^\circ$).
 - **Circular Statistics**: Weighted circular mean ($\mu = \text{angle}(\sum w_i e^{j\theta_i})$) and circular standard deviation ($\sigma$) are calculated using `scipy.stats.vonmises` fitting, eliminating artificial $-180^\circ / +180^\circ$ boundary discontinuities.
 
@@ -131,7 +151,10 @@ Residues are categorized based on surface accessibility and interface burial usi
 2. Torsion dataset: `python script/generate_187_protein_torsion_datasets.py`
    (writes `input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`, the per-complex
    pairing log `output_files/..._187_pairing_log.csv`, and CSV/TSV/JSON copies in `output_files/`).
-3. Libraries: `python script/derive_all_updated_rotamer_libraries.py`.
+3. Libraries: `python script/derive_all_updated_rotamer_libraries.py` (writes the v2 libraries to
+   `RBPs_BBD_rotamer_lib_v2/`, `RBPs_BBI_rotamer_lib_v2/` and `protein-protein/library_v2/`; the v1
+   directories are never overwritten).
+4. Tests: `python test/test_rotamer_definitions.py`.
 
 Both steps are deterministic: rerunning them on the same inputs reproduces the committed files byte for byte.
 
@@ -152,11 +175,11 @@ use only residues with both φ and ψ defined.
 import pandas as pd
 
 # Load Backbone-Dependent Bound Interface Rotamer Library
-df_bbd = pd.read_csv("RBPs_BBD_rotamer_lib/RBPs_I_bbd_B_rotamer_lib.csv")
+df_bbd = pd.read_csv("RBPs_BBD_rotamer_lib_v2/RBPs_I_bbd_B_rotamer_lib.csv")
 
 # Filter rotamers for Arg at phi = -60, psi = -30
 arg_rotamers = df_bbd[(df_bbd["AA"] == "ARG") & (df_bbd["PHI"] == -60) & (df_bbd["PSI"] == -30)]
-print(arg_rotamers[["AA", "PHI", "PSI", "Prob", "B_CHI1", "B_CHI2", "B_CHI1Sig"]])
+print(arg_rotamers[["AA", "PHI", "PSI", "PROB", "B_CHI1", "B_CHI2", "B_CHI1Sig"]])
 ```
 
 ---
