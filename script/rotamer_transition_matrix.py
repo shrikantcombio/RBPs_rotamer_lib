@@ -9,6 +9,7 @@ publication-quality transition matrix plots.
 sp3 chis are classified into six 60-degree states (T, p, P, t, M, m). The terminal sp2 chi of
 ASP, GLU, PHE, TYR, ASN, GLN, HIS and TRP uses the v2 rotamer-library bins
 (rotamer_definitions.py) and is labelled by its mode, e.g. PHE 'm90', HIS 't-75', GLN 'mt*'.
+PRO is labelled by ring pucker ('endo' / 'exo') at every depth.
 In v1 these chis were folded/binned like sp3 chis, so a PHE ring at chi2 = 89 and 91 degrees
 (-89 after folding) counted as a p -> m transition.
 
@@ -113,6 +114,8 @@ class RotamerTransitionMatrix:
 
     def _state_sort_key(self, state):
         """Orders states by their chi symbols: letters as in CHI_STATES, sp2 mode labels by angle."""
+        if state in (("endo",), ("exo",)):
+            return (0 if state == ("endo",) else 1,)
         return tuple(self.CHI_STATES.index(sym) if sym in self.CHI_STATES else
                      (len(self.CHI_STATES) + (0.0 if sym == "*" else float(sym) + 360.0))
                      for sym in state)
@@ -152,8 +155,12 @@ class RotamerTransitionMatrix:
             b_chis = [row[col] for col in b_cols]
             if any(pd.isna(v) or v is None for v in u_chis) or any(pd.isna(v) or v is None for v in b_chis):
                 continue
-            u_symbols = tuple(self.chi_symbol(residue, i, row[f"U_CHI{i}"]) for i in range(1, depth + 1))
-            b_symbols = tuple(self.chi_symbol(residue, i, row[f"B_CHI{i}"]) for i in range(1, depth + 1))
+            if residue == "PRO":
+                u_symbols = (rotdef.proline_pucker(row["U_CHI1"]),)
+                b_symbols = (rotdef.proline_pucker(row["B_CHI1"]),)
+            else:
+                u_symbols = tuple(self.chi_symbol(residue, i, row[f"U_CHI{i}"]) for i in range(1, depth + 1))
+                b_symbols = tuple(self.chi_symbol(residue, i, row[f"B_CHI{i}"]) for i in range(1, depth + 1))
             if None in u_symbols or None in b_symbols:
                 continue
             u_states.append(u_symbols)

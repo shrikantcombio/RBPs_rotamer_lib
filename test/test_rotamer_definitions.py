@@ -54,6 +54,13 @@ class TerminalSp2BinTests(unittest.TestCase):
             self.assertEqual(rotdef.chi_class("LEU", 1, a), rotdef.rotameric_class(a))
 
 
+class ProlineTests(unittest.TestCase):
+    def test_pucker_from_chi1_sign(self):
+        self.assertEqual(rotdef.proline_pucker(28.0), "endo")
+        self.assertEqual(rotdef.proline_pucker(-27.0), "exo")
+        self.assertEqual(rotdef.proline_pucker(-35.0), "exo")  # 6-state 'm', not a different rotamer
+
+
 class StatisticsTests(unittest.TestCase):
     def test_symmetric_mean_uses_180_periodicity(self):
         mean, sigma = rotdef.chi_mean_and_sigma("PHE", 1, [89.0, -89.0, 91.0, -91.0])

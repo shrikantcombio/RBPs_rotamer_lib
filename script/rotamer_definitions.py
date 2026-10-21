@@ -65,6 +65,15 @@ TERMINAL_SP2_LABELS = {
 }
 
 
+def proline_pucker(chi1):
+    """
+    Proline ring pucker: 'endo' (C-gamma endo, chi1 > 0, chi2 < 0) or 'exo' (C-gamma exo, chi1 < 0,
+    chi2 > 0). The libraries' 3-split chi1 bins separate the two puckers at 0; 6-state letters do not
+    apply (both puckers would be the off-rotamer 'T').
+    """
+    return "endo" if float(chi1) > 0 else "exo"
+
+
 def rotameric_class(angle, n_splits=3):
     """Classifies an sp3 chi angle (degrees) into a rotameric bin index."""
     if n_splits == 3:

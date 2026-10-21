@@ -165,10 +165,12 @@ def _n_key_chis(aa: str) -> int:
 
 
 def get_rotamer_key(aa: str, chi_vals: list) -> str:
-    """Rotamer key of chi1..chi(n-1) (chi1 for single-chi residues) in the library bins."""
+    """Rotamer key of chi1..chi(n-1) (chi1 for single-chi residues) in the library bins; PRO: ring pucker."""
     n_key = _n_key_chis(aa)
     if n_key == 0 or len(chi_vals) < n_key:
         return ""
+    if aa == "PRO":
+        return rotdef.proline_pucker(chi_vals[0])
     return "".join(_CLASS_LETTERS[rotdef.chi_class(aa, i, float(chi_vals[i]))] for i in range(n_key))
 
 
