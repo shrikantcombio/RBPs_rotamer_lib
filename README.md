@@ -155,6 +155,12 @@ Residues are categorized based on surface accessibility and interface burial usi
    `RBPs_BBD_rotamer_lib_v2/`, `RBPs_BBI_rotamer_lib_v2/` and `protein-protein/library_v2/`; the v1
    directories are never overwritten).
 4. Tests: `python test/test_rotamer_definitions.py`.
+5. Transition matrices: `python script/rotamer_transition_matrix.py` (writes
+   `output_files/transition_matrices_v2/` and `figure(s)/transition_matrices_v2/`).
+6. Backbone log-odds: `python script/backbone_logodds_analysis_final.py --torsion
+   input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv --bbd-dir
+   ../rota_assign/rota_lib_dict/v2/bbd --output-dir output_files/logodds_v2` (the BBD cache is built
+   by rota_assign on first use).
 
 Both steps are deterministic: rerunning them on the same inputs reproduces the committed files byte for byte.
 

@@ -6,6 +6,12 @@ Class and engine to derive side-chain rotamer transition matrices from Unbound (
 to Bound ('B') states across Chi angles (Chi1, Chi2, Chi3, Chi4) and generate
 publication-quality transition matrix plots.
 
+sp3 chis are classified into six 60-degree states (T, p, P, t, M, m). The terminal sp2 chi of
+ASP, GLU, PHE, TYR, ASN, GLN, HIS and TRP uses the v2 rotamer-library bins
+(rotamer_definitions.py) and is labelled by its mode, e.g. PHE 'm90', HIS 't-75', GLN 'mt*'.
+In v1 these chis were folded/binned like sp3 chis, so a PHE ring at chi2 = 89 and 91 degrees
+(-89 after folding) counted as a p -> m transition.
+
 Usage:
     python script/rotamer_transition_matrix.py [options]
 """
@@ -18,6 +24,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import rotamer_definitions as rotdef
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -25,9 +33,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATASET_DIR = ROOT_DIR / "input_files"
-RESULTS_DIR = ROOT_DIR / "output_files" / "transition_matrices"
-FIGURES_DIR = ROOT_DIR / "figure" / "transition_matrices"
-ALT_FIGURES_DIR = ROOT_DIR / "figures" / "transition_matrices"
+# v2 outputs; the v1 matrices in output_files/transition_matrices/ and figure(s)/transition_matrices/
+# are left unchanged
+RESULTS_DIR = ROOT_DIR / "output_files" / "transition_matrices_v2"
+FIGURES_DIR = ROOT_DIR / "figure" / "transition_matrices_v2"
+ALT_FIGURES_DIR = ROOT_DIR / "figures" / "transition_matrices_v2"
 
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,59 +47,6 @@ ALT_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 plt.style.use("tableau-colorblind10")
 plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica"]
-
-
-class RotamerTransitionMatrix:
-    """
-    Class to calculate and plot side-chain rotamer transition matrices between
-    Unbound ('U') and Bound ('B') states for protein residues across Chi angles (1..4).
-    """
-
-    # Rotamer state symbols: T (trans/gg), p (g+), P (gt), t (t), M (tg), m (g-)
-    CHI_STATES = ["T", "p", "P", "t", "M", "m"]
-
-    # Target residues for each Chi angle depth
-    CHI_DEPTH_RESIDUES = {
-        1: ["CYS", "SER", "THR", "VAL"],
-        2: ["ARG", "ASN", "ASP", "GLU", "GLN", "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "TRP", "TYR"],
-        3: ["ARG", "LYS", "GLU", "GLN", "MET"],
-        4: ["ARG", "LYS"],
-    }
-
-    def __init__(self, df=None, chi_depth=1, sasa_filter=None, threshold=0.0):
-        """
-        Initialize the RotamerTransitionMatrix calculator.
-
-        Parameters:
-        -----------
-        df : pd.DataFrame, optional
-            Dataset containing backbone and side-chain torsion angles.
-        chi_depth : int
-            Depth of Chi angles (1, 2, 3, or 4).
-        sasa_filter : str, optional
-            'I' for Interface, 'N' for Non-interface, or None for all.
-        threshold : float
-            Minimum row transition probability threshold to filter empty states.
-        """
-        self.df = df
-        self.chi_depth = chi_depth
-        self.sasa_filter = sasa_filter
-        self.threshold = threshold
-
-def fold_symmetric_chi(val, aa, chi_idx):
-    """
-    Folds terminal symmetric chi angles (ASP chi2, GLU chi3, PHE chi2, TYR chi2) into [-90, 90) deg.
-    """
-    if pd.isna(val) or val is None:
-        return None
-    v = float(val)
-    aa_upper = str(aa).upper().strip()
-    if (aa_upper in ['ASP', 'PHE', 'TYR'] and chi_idx == 2) or (aa_upper == 'GLU' and chi_idx == 3):
-        while v >= 90.0:
-            v -= 180.0
-        while v < -90.0:
-            v += 180.0
-    return v
 
 
 class RotamerTransitionMatrix:
@@ -147,11 +104,18 @@ class RotamerTransitionMatrix:
             return "m"  # g- (around -60°)
         return None
 
-    def _generate_state_combinations(self, depth):
-        """Generate all possible rotamer state combination strings for a given Chi depth."""
-        import itertools
+    def chi_symbol(self, residue, chi_idx, val):
+        """State symbol of chi `chi_idx` (1-based): a 6-state letter, or the mode label of a terminal sp2 chi."""
+        if val is None or pd.isna(val):
+            return None
+        label = rotdef.terminal_sp2_label(residue, chi_idx - 1, float(val))
+        return label if label is not None else self.classify_chi_state(val)
 
-        return ["".join(p) for p in itertools.product(self.CHI_STATES, repeat=depth)]
+    def _state_sort_key(self, state):
+        """Orders states by their chi symbols: letters as in CHI_STATES, sp2 mode labels by angle."""
+        return tuple(self.CHI_STATES.index(sym) if sym in self.CHI_STATES else
+                     (len(self.CHI_STATES) + (0.0 if sym == "*" else float(sym) + 360.0))
+                     for sym in state)
 
     def compute_transition_matrix(self, df, residue, chi_depth=None, sasa_filter=None, threshold=None):
         """
@@ -188,30 +152,21 @@ class RotamerTransitionMatrix:
             b_chis = [row[col] for col in b_cols]
             if any(pd.isna(v) or v is None for v in u_chis) or any(pd.isna(v) or v is None for v in b_chis):
                 continue
-            u_symbols = []
-            b_symbols = []
-            valid_row = True
-            for i in range(1, depth + 1):
-                u_val = fold_symmetric_chi(row[f"U_CHI{i}"], residue, i)
-                b_val = fold_symmetric_chi(row[f"B_CHI{i}"], residue, i)
-                u_sym = self.classify_chi_state(u_val)
-                b_sym = self.classify_chi_state(b_val)
-                if u_sym is None or b_sym is None:
-                    valid_row = False
-                    break
-                u_symbols.append(u_sym)
-                b_symbols.append(b_sym)
-            if valid_row:
-                u_states.append("".join(u_symbols))
-                b_states.append("".join(b_symbols))
+            u_symbols = tuple(self.chi_symbol(residue, i, row[f"U_CHI{i}"]) for i in range(1, depth + 1))
+            b_symbols = tuple(self.chi_symbol(residue, i, row[f"B_CHI{i}"]) for i in range(1, depth + 1))
+            if None in u_symbols or None in b_symbols:
+                continue
+            u_states.append(u_symbols)
+            b_states.append(b_symbols)
 
-        # Generate full possible state list or active state list
-        all_possible_states = self._generate_state_combinations(depth)
+        # Observed states in canonical order
+        all_states = sorted(set(u_states) | set(b_states), key=self._state_sort_key)
+        names = ["".join(st) for st in all_states]
 
         # Build raw count matrix
-        counts_df = pd.DataFrame(0, index=all_possible_states, columns=all_possible_states)
+        counts_df = pd.DataFrame(0, index=names, columns=names)
         for u_st, b_st in zip(u_states, b_states):
-            counts_df.loc[u_st, b_st] += 1
+            counts_df.loc["".join(u_st), "".join(b_st)] += 1
 
         # Remove rows and columns that are completely zero in the data
         active_u_states = counts_df.index[counts_df.sum(axis=1) > 0].tolist()
@@ -408,7 +363,7 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
+        default=DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
         help="Path to dataset containing backbone & sidechain torsion angles.",
     )
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for transition matrix CSV files.")

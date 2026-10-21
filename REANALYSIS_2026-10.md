@@ -71,9 +71,59 @@ Most probable BBI bound rotamer (terminal χ shown as an angle; PHE/TYR χ2 100�
 | TRP | 8 → 9 | m94 (0.32) | m99 (0.30) |
 | TYR | 6 → 3 | m-70 (0.36) | m100 (0.52) |
 
-Analyses 1–4 compare only the letter part of rotamer names (sp3 chis), but the names come from
-rota_assign's own copy of the libraries (still v1); they are to be rerun once rota_assign uses v2.
+Analyses 1–4 compare only the letter part of rotamer names (sp3 chis); the names come from
+rota_assign, which uses v2 since branch `fix/sp2-terminal-chi-rotamers` (rota_assign). They have not
+been rerun with v2. Note: rota_assign names rotamers with the same 6-state labels, so every PRO
+library rotamer has the prefix `T` (an "off-rotamer" letter) and PRO pucker switches are invisible.
 Analysis 6 predicts the most probable library row and must be rerun with v2.
+
+### 2b. Transition matrices and backbone log-odds with v2 (October 21)
+
+**Unbound → bound transition matrices** (`script/rotamer_transition_matrix.py`; outputs in
+`output_files/transition_matrices_v2/`, figures in `figure(s)/transition_matrices_v2/`). The script
+read `input_files/PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv` (September 2024, before
+the pairing fixes) and now reads the current dataset. Terminal sp2 chis use the v2 bins, labelled by
+mode (PHE `m90`, HIS `t-75`, GLN `mt*`). Fraction of residues whose state changes:
+
+| AA, depth | Interface: 2024 data, v1 states → current data, v2 states | Non-interface |
+|---|---|---|
+| PHE χ2 | 35.4 % → 13.7 % | 25.5 % → 7.2 % |
+| TYR χ2 | 32.8 % → 9.9 % | 25.1 % → 6.1 % |
+| ASP χ2 | 54.5 % → 25.0 % | 46.0 % → 20.2 % |
+| HIS χ2 | 54.3 % → 42.3 % | 46.2 % → 35.8 % |
+| TRP χ2 | 37.3 % → 19.1 % | 23.5 % → 8.5 % |
+| ASN χ2 | 62.4 % → 43.0 % | 54.3 % → 36.9 % |
+| GLU χ3 | 78.0 % → 55.3 % | 68.2 % → 49.1 % |
+| GLN χ3 | 69.4 % → 53.0 % | 68.8 % → 44.6 % |
+
+Residues without a terminal sp2 chi are unchanged by the v2 states (e.g. LEU χ2 35.8 % / 30.1 %,
+SER χ1 38.9 % / 31.4 % on the current data); the 2024 → current dataset change moves them by ≤ 2.5
+points. Interface rates remain higher than non-interface rates for every residue.
+
+**Backbone-conditioned log-odds** (`script/backbone_logodds_analysis_final.py`; outputs in
+`output_files/logodds_v2/`). Two further defects were fixed:
+- The residue's rotamer key used 6-state labels (edges at ±30°, ±90°, ±150°) while library rows were
+  keyed by the labels of their mean chis, so residues near an edge did not find their rotamer in their
+  own cell and either took a neighbouring cell's value or were excluded as "off-library" (5,562 of
+  57,341 residues). PRO was the worst case: both pucker rows are labelled `T`, but the exo pucker
+  (χ1 ≈ −27°) is `m` for 14 % of PRO residues. Keys now use the library bins; 1,390 residues are
+  off-library.
+- The backbone grid used `round()` (ties to even), not the library's bins.
+
+| | Old key, v1 | Fixed key, v1 | Fixed key, v2 |
+|---|---|---|---|
+| Residues analysed (I / N) | 4,838 / 47,100 | 5,330 / 50,491 | 5,402 / 50,549 |
+| Median log-odds I / N | 0.000 / −0.001 | 0.028 / −0.003 | 0.034 / 0.000 |
+| I vs N, residue level (Mann–Whitney p) | 0.032 | 9.2e-5 | 2.0e-5 |
+| I vs N, PDB level (p) | 0.32 | 0.94 | 0.47 |
+| χ1-shifted, passive % I / N | 54.2 / 56.3 | 60.3 / 57.2 | 60.7 / 58.4 |
+| Passive vs active, I vs N (Fisher OR, p) | 1.04, 0.51 | 1.23, 0.0021 | 1.13, 0.071 |
+| Significant AA, interface (BH) | ASP CYS GLN GLU HIS ILE LYS MET PHE PRO TRP VAL | ASP CYS GLN GLU HIS ILE LYS MET PHE TRP VAL | ASN ASP CYS GLN HIS ILE LYS MET PHE VAL |
+
+With v2, PHE at the interface changes sign (median −0.157 → +0.095) and TRP (median −5.53 in v1, an
+artefact of the split χ2 rotamer) is no longer significant; PRO is no longer significant once keys
+match the library. CYS at the interface (median −5.38, n = 46) is a pseudocount artefact: 54 % of these
+residues have no entry in the sparse bound-interface library (TRP: 39 %); treat both as unreliable.
 
 ## 3. Results
 

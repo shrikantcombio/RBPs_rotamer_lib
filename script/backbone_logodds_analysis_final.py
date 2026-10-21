@@ -40,13 +40,14 @@ Outputs
 
 Usage
 -----
-  python backbone_logodds_analysis_final.py \\
-      --torsion  path/to/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json \\
-      --bbd-dir  path/to/bbd_json_dir/ \\
-      --output-dir results/logodds/ \\
+  python script/backbone_logodds_analysis_final.py \\
+      --torsion  input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv \\
+      --bbd-dir  ../rota_assign/rota_lib_dict/v2/bbd \\
+      --output-dir output_files/logodds_v2 \\
       --bb-sep 30
 
-  The bbd-dir must contain exactly four files:
+  --bbd-dir is a rota_assign BBD cache: rota_lib_dict/v2/bbd (v2 libraries) or
+  rota_lib_dict/bbd (v1). It must contain these four files:
       full_rota_lib_bbd_b_I.json
       full_rota_lib_bbd_b_N.json
       full_rota_lib_bbd_ub_I.json
@@ -58,15 +59,22 @@ Dependencies
 
 Notes
 -----
-  - 5012 residues excluded where BOTH backbone cells fall outside the library
-    (rotamer outliers; both probabilities at pseudocount = 0.01, log-odds = 0).
-    These are reported in the summary but excluded from statistical tests.
+  - Residues whose rotamer is absent from the library at BOTH backbone cells
+    (rotamer outliers; both probabilities at pseudocount = 0.01, log-odds = 0)
+    are reported in the summary but excluded from statistical tests.
   - The BBD library was built from the same 187 structures used here,
     so absolute probability values are not fully independent. The log-odds
     ratio (bound vs unbound backbone cell) is internally consistent.
-  - Symmetric terminal chi folding applied: ASP chi2, GLU chi3, PHE chi2,
-    TYR chi2 → [-90, 90) before rotamer key construction.
-  - Sentinel zeros (U_PHI or U_PSI == 0.0) filtered before delta computation.
+  - The rotamer key is the library bin (rotamer_definitions.chi_class: p/t/m
+    for sp3 chis) of chi1..chi(n-1); the terminal chi is not part of the key.
+    Library rows are grouped by the bins of their mean chis, and
+    P(rotamer | cell) sums the rows sharing the key. The residue and the library
+    are classified with the same bins: the 6-state labels used before (edges at
+    +-30, +-90, +-150) split PRO's exo pucker (chi1 ~ -27) between 'T' and 'm'
+    while every PRO library row was 'T', so such residues fell back to a
+    neighbouring cell.
+  - Residues without a defined bound and unbound phi/psi (NaN: chain termini,
+    chain breaks, residues without an unbound partner) are skipped.
 """
 
 import argparse
@@ -74,10 +82,15 @@ import json
 import logging
 from pathlib import Path
 
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rotamer_definitions as rotdef
 
 logging.basicConfig(
     level=logging.INFO,
@@ -116,9 +129,6 @@ def benjamini_hochberg(p_values):
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Symmetric terminal chi: residue -> 1-indexed chi position to fold into [-90, 90)
-SYMMETRIC_CHI_IDX = {"ASP": 2, "GLU": 3, "PHE": 2, "TYR": 2}
-
 # Number of rotatable chi angles per residue type
 AA_NCHI = {
     "ARG": 4, "LYS": 4, "GLU": 3, "GLN": 3, "MET": 3,
@@ -146,64 +156,47 @@ plt.rcParams.update({"font.family": "sans-serif", "font.size": 11})
 # 1. Utility functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fold_symmetric_chi(angle: float) -> float:
-    """Fold a symmetric terminal chi angle into [-90, 90).
-
-    Applies to ASP chi2, GLU chi3, PHE chi2, TYR chi2 — residues where
-    swapping the two equivalent terminal heavy atoms adds exactly 180°.
-    Matches Dunbrack 2011 / MolProbity convention.
-    """
-    if angle >= 90.0:
-        return angle - 180.0
-    if angle < -90.0:
-        return angle + 180.0
-    return angle
+_CLASS_LETTERS = {0: "p", 1: "t", 2: "m"}  # rotdef.rotameric_class (3 splits) -> letter
 
 
-def assign_ptm_state(val: float) -> str:
-    """Classify a chi angle into the 6-state scheme used to build the library.
-
-    Bins (degrees):
-        T : (-30,  30]   eclipsed near 0°
-        p : ( 30,  90]   gauche+
-        P : ( 90, 150]   eclipsed near 120°
-        t : (150, 180] ∪ (-180, -150]   trans
-        M : (-150, -90]  eclipsed near -120°
-        m : (-90,  -30]  gauche-
-    """
-    if -30 < val <= 30:          return "T"
-    if 30  < val <= 90:          return "p"
-    if 90  < val <= 150:         return "P"
-    if val > 150 or val <= -150: return "t"
-    if -150 < val <= -90:        return "M"
-    if -90  < val <= -30:        return "m"
-    return str(int(val))
+def _n_key_chis(aa: str) -> int:
+    nchi = AA_NCHI.get(aa, 0)
+    return nchi - 1 if nchi > 1 else nchi
 
 
 def get_rotamer_key(aa: str, chi_vals: list) -> str:
-    """Build the rotamer key string for aa given a list of chi angles.
-
-    Uses n-1 chi for multi-chi residues (the terminal chi is stored
-    numerically in the library, not as a ptm label).
-    Applies symmetric-chi folding for ASP/GLU/PHE/TYR.
-    """
-    nchi = AA_NCHI.get(aa, 0)
-    if nchi == 0 or not chi_vals:
+    """Rotamer key of chi1..chi(n-1) (chi1 for single-chi residues) in the library bins."""
+    n_key = _n_key_chis(aa)
+    if n_key == 0 or len(chi_vals) < n_key:
         return ""
-    sym_idx = SYMMETRIC_CHI_IDX.get(aa, None)  # 1-indexed
-    n_key = min(nchi - 1, len(chi_vals)) if nchi > 1 else min(1, len(chi_vals))
-    key_parts = []
-    for i in range(n_key):
-        v = float(chi_vals[i])
-        if sym_idx is not None and (i + 1) == sym_idx:
-            v = fold_symmetric_chi(v)
-        key_parts.append(assign_ptm_state(v))
-    return "".join(key_parts)
+    return "".join(_CLASS_LETTERS[rotdef.chi_class(aa, i, float(chi_vals[i]))] for i in range(n_key))
+
+
+def regroup_library(bbd: dict) -> dict:
+    """
+    {aa: {cell: {rotamer_key: summed probability}}} from a rota_assign BBD cache, whose rows
+    ([chi1, ..., chiN, prob]) are keyed by 6-state letters; rows are re-keyed by the library
+    bins of their mean chis (get_rotamer_key).
+    """
+    out = {}
+    for aa, cells in bbd.items():
+        if aa not in AA_NCHI:
+            continue
+        for cell, groups in cells.items():
+            acc = out.setdefault(aa, {}).setdefault(cell, {})
+            for rows in groups.values():
+                for row in rows:
+                    key = get_rotamer_key(aa, row[:-1])
+                    acc[key] = acc.get(key, 0.0) + float(row[-1])
+    return out
 
 
 def snap_to_grid(angle: float, bb_sep: int = 30) -> int:
-    """Snap a backbone angle to the nearest grid centre (multiple of bb_sep)."""
-    return int(round(angle / bb_sep) * bb_sep)
+    """Backbone grid centre of an angle, as in the library build
+    (BackboneDependentRotamerLibrary.get_closest_angle): bins
+    [g - bb_sep/2, g + bb_sep/2), the bin centred on 180 labelled -180."""
+    g = int(np.floor((angle + bb_sep / 2.0) / bb_sep)) * bb_sep
+    return g - 360 if g >= 180 else g
 
 
 def circular_diff(b: float, u: float) -> float:
@@ -256,9 +249,8 @@ def get_prob_from_bbd(bbd: dict, aa: str, rotamer_key: str,
                 if conf_key in aa_lib:
                     cell = aa_lib[conf_key]
                     if rotamer_key in cell:
-                        # Each entry: [chi1, ..., chiN, prob]
-                        p = sum(row[-1] for row in cell[rotamer_key])
-                        return max(p, PSEUDOCOUNT)
+                        # regroup_library: summed probability of the key's rows
+                        return max(cell[rotamer_key], PSEUDOCOUNT)
 
     return PSEUDOCOUNT
 
@@ -274,7 +266,7 @@ def load_bbd_libraries(bbd_dir: Path) -> dict:
     -------
     dict : libs[state][sasa] where state ∈ {'b','ub'}, sasa ∈ {'I','N'}
     """
-    fallback_dir = Path(__file__).resolve().parent.parent.parent / "rota_assign" / "rota_lib_dict" / "bbd"
+    fallback_dir = Path(__file__).resolve().parent.parent.parent / "rota_assign" / "rota_lib_dict" / "v2" / "bbd"
 
     candidates = {
         ("b",  "I"): ["full_rota_lib_bbd_b_I.json", "RBPs_I_bbd_B_rotamer_lib.json", "RBPs_I_bbd_b_rotamer_lib.json"],
@@ -297,8 +289,8 @@ def load_bbd_libraries(bbd_dir: Path) -> dict:
 
         if found_file is not None:
             with open(found_file) as f:
-                libs.setdefault(state, {})[sasa] = json.load(f)
-            logging.info(f"Loaded {found_file.name}")
+                libs.setdefault(state, {})[sasa] = regroup_library(json.load(f))
+            logging.info(f"Loaded {found_file}")
         else:
             logging.warning(f"BBD file not found for state={state}, sasa={sasa} in {bbd_dir}")
             libs.setdefault(state, {})[sasa] = {}
@@ -322,7 +314,7 @@ def compute_logodds(df: pd.DataFrame, libs: dict, bb_sep: int = 30) -> pd.DataFr
     ---------------
     - Residue type must be in AA_NCHI.
     - SASA must be 'I' or 'N'.
-    - U_PHI, U_PSI must not be NaN or sentinel 0.0.
+    - B_PHI, B_PSI, U_PHI, U_PSI must be defined (not NaN).
     - At least chi1 must be non-NaN in the bound state.
 
     Returns
@@ -355,9 +347,8 @@ def compute_logodds(df: pd.DataFrame, libs: dict, bb_sep: int = 30) -> pd.DataFr
         phi_u = row["U_PHI"]
         psi_u = row["U_PSI"]
 
-        # Filter sentinel zeros and NaNs in backbone
-        if any(pd.isna(v) or float(v) == 0.0
-               for v in [phi_b, psi_b, phi_u, psi_u]):
+        # Backbone must be defined in both states
+        if any(pd.isna(v) for v in [phi_b, psi_b, phi_u, psi_u]):
             continue
 
         phi_b, psi_b = float(phi_b), float(psi_b)
@@ -372,7 +363,9 @@ def compute_logodds(df: pd.DataFrame, libs: dict, bb_sep: int = 30) -> pd.DataFr
                 break
             b_chis.append(float(bc))
 
-        if not b_chis:
+        # The rotamer key needs chi1..chi(n-1); truncated side chains are skipped rather
+        # than counted as library outliers
+        if len(b_chis) < max(1, nchi - 1):
             continue
 
         # Collect unbound chi1 (for transition detection)
@@ -398,10 +391,10 @@ def compute_logodds(df: pd.DataFrame, libs: dict, bb_sep: int = 30) -> pd.DataFr
         psi_u_g = snap_to_grid(psi_u, bb_sep)
         backbone_shifted = int((phi_b_g != phi_u_g) or (psi_b_g != psi_u_g))
 
-        # Chi1 rotamer state change
-        b_chi1_state = assign_ptm_state(b_chis[0])
-        u_chi1_state = assign_ptm_state(u_chi1) if u_chi1 is not None else None
-        chi1_shifted = int(b_chi1_state != u_chi1_state) if u_chi1_state else 0
+        # Chi1 rotamer state change (library bins)
+        b_chi1_state = rotdef.chi_class(aa, 0, b_chis[0])
+        u_chi1_state = rotdef.chi_class(aa, 0, u_chi1) if u_chi1 is not None else None
+        chi1_shifted = int(b_chi1_state != u_chi1_state) if u_chi1_state is not None else 0
 
         # Secondary structure change
         b_ss = str(row.get("B_SS", "?")).strip()

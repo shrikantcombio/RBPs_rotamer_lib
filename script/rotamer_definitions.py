@@ -37,7 +37,8 @@ RESIDUE_CHI_COUNTS = {
 #               angles above the last edge wrap into the first bin. No edges = one bin.
 # Edges follow the density minima of the 187-complex bound dataset (20-degree histograms):
 #   ASP chi2, GLU chi3 : single peak near 0 when folded; minima at +-90
-#   PHE chi2, TYR chi2 : single peak near 90 when folded; minimum near -30/150 (Dunbrack range)
+#   PHE chi2, TYR chi2 : single peak near 90 when folded (minimum near 30); reported in Dunbrack's
+#                        range [-30, 150)
 #   HIS chi2           : modes near -75, 75, 170; minima near 0 and +-120
 #   TRP chi2           : modes near -100, 0, 90 (Lovell m-90, m0, m95); minima near -50, 50, 180
 #   ASN chi2           : modes near -30 and 120 (Lovell m-20, m120); minima near -150 and 60
@@ -51,6 +52,16 @@ TERMINAL_SP2_CHI = {
     "TRP": (1, 360, -180.0, (-50.0, 50.0, 180.0)),
     "ASN": (1, 360, -180.0, (-150.0, 60.0)),
     "GLN": (2, 360, -180.0, ()),
+}
+
+# Label of each terminal sp2 bin (index order of terminal_sp2_class): the approximate mode in
+# degrees, '*' for a single bin without a defined mode
+TERMINAL_SP2_LABELS = {
+    "ASP": ("0",), "GLU": ("0",), "PHE": ("90",), "TYR": ("90",),
+    "HIS": ("180", "-75", "75"),
+    "TRP": ("-100", "0", "90"),
+    "ASN": ("120", "-30"),
+    "GLN": ("*",),
 }
 
 
@@ -108,6 +119,15 @@ def terminal_sp2_class(angle, edges):
         return 0
     k = bisect.bisect_left(edges, angle)
     return 0 if k == len(edges) else k
+
+
+def terminal_sp2_label(aa, chi_idx, angle):
+    """Mode label of a terminal sp2 chi (see TERMINAL_SP2_LABELS), or None for other chis."""
+    sp2 = terminal_sp2(aa, chi_idx)
+    if sp2 is None:
+        return None
+    period, start, edges = sp2
+    return TERMINAL_SP2_LABELS[aa][terminal_sp2_class(canonical_angle(angle, period, start), edges)]
 
 
 def chi_class(aa, chi_idx, angle, rot_bin_lib=None):
