@@ -73,8 +73,7 @@ Most probable BBI bound rotamer (terminal χ shown as an angle; PHE/TYR χ2 100�
 
 Analyses 1–4 compare only the letter part of rotamer names (sp3 chis); the names come from
 rota_assign, which uses v2 since branch `fix/sp2-terminal-chi-rotamers` (rota_assign). They have not
-been rerun with v2. Note: rota_assign names rotamers with the same 6-state labels, so every PRO
-library rotamer has the prefix `T` (an "off-rotamer" letter) and PRO pucker switches are invisible.
+been rerun with v2 (see 2c).
 Analysis 6 predicts the most probable library row and must be rerun with v2.
 
 ### 2b. Transition matrices and backbone log-odds with v2 (October 21)
@@ -124,6 +123,40 @@ With v2, PHE at the interface changes sign (median −0.157 → +0.095) and TRP 
 artefact of the split χ2 rotamer) is no longer significant; PRO is no longer significant once keys
 match the library. CYS at the interface (median −5.38, n = 46) is a pseudocount artefact: 54 % of these
 residues have no entry in the sparse bound-interface library (TRP: 39 %); treat both as unreliable.
+
+### 2c. Analyses 1–6 with v2 libraries and proline puckers (October 21)
+
+rota_assign now uses v2 and names PRO by ring pucker, `endo` (χ1 > 0) or `exo` (χ1 < 0). Before, PRO
+names were `T` + the 6-state letter of the library row's χ2 (`Tm` / `Tp`): the uppercase `T` made
+every PRO an off-rotamer in analysis 2, and library χ2 means near ±30° gave the same pucker different
+names in different cells (`TT` vs `Tp`), inflating PRO transitions. Analysis 6 now sums library rows
+of the same class before choosing a cell's most probable class. Results are in
+`output_files/analyses_v2/` and `figure(s)/energy_pvalues_v2/`; the v1 results above are unchanged.
+
+| | v1 (Oct 20) | v2 |
+|---|---|---|
+| **Analysis 1** interface / non-interface transition rate | 41.21 % / 28.82 % | 38.38 % / 27.88 % |
+| Odds ratio (Fisher p) | 1.73 (2.1e-77) | 1.61 (1.4e-58) |
+| AA significant after FDR | 13 | 12 (GLN, GLU drop out; TRP added) |
+| PHE / TYR / ASP / PRO interface rate | 29.5 / 21.9 / 34.4 / 41.0 % | 18.0 / 16.6 / 25.5 / 26.0 % |
+| **Analysis 2** interface OFF→ON / ON→OFF / OFF→OFF | 0.78 / 0.65 / 3.99 % | 0.14 / 0.09 / 0.05 % |
+| Fisher OR, OFF→ON enrichment (p) | 1.21 (0.42) | 2.26 (0.16) |
+| **Analysis 3** interface rigid / CS / IF | 58.8 / 30.2 / 11.0 % | 61.6 / 29.5 / 8.9 % |
+| Transitioning interface CS : IF; Fisher OR (p) | 73.3 : 26.7; 1.77 (1.9e-31) | 76.7 : 23.3; 1.73 (2.7e-26) |
+| **Analysis 4** interface rate R / S / F | 39.3 / 42.4 / 44.4 % | 36.6 / 39.9 / 41.2 % |
+| RNA class A / B / C / D | 40.9 / 41.5 / 45.4 / 38.3 % | 36.8 / 38.7 / 43.2 / 35.7 % |
+| **Analysis 5** largest JS divergence; significant AA | MET 0.16, LYS 0.16, CYS 0.12; CYS | unchanged (PRO 0.0095 → 0.0010) |
+| **Analysis 6** interface recovery RBP / PPI library | 38.80 / 42.63 % | 41.14 / 44.71 % |
+| Gain; both covered RBP / PPI | −3.83 %; 43.10 / 44.18 % | −3.57 %; 44.79 / 46.38 % (McNemar p = 2.6e-13) |
+
+Conclusions of analyses 1, 3 and 4 hold (same direction and ordering). Analysis 5 is library-free
+and unchanged except PRO. Analysis 6 still shows no advantage of the RBP library.
+
+**Analysis 2 needs a new definition.** A residue is OFF only when the library row it matches has an
+off-staggered mean χ1. With PRO no longer `T`, almost no residue is OFF (8 interface OFF→ON residues).
+On the bound structures 1,411 residues are OFF by this rule, while 4,150 have their own χ1 off the
+staggered positions. Lovell et al. define an off-rotamer by the residue's distance from every library
+rotamer; the analysis should be redefined before its results are reported.
 
 ## 3. Results
 
