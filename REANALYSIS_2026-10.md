@@ -156,7 +156,40 @@ and unchanged except PRO. Analysis 6 still shows no advantage of the RBP library
 off-staggered mean χ1. With PRO no longer `T`, almost no residue is OFF (8 interface OFF→ON residues).
 On the bound structures 1,411 residues are OFF by this rule, while 4,150 have their own χ1 off the
 staggered positions. Lovell et al. define an off-rotamer by the residue's distance from every library
-rotamer; the analysis should be redefined before its results are reported.
+rotamer; the analysis is redefined in 2d.
+
+### 2d. Analysis 2 with a geometric off-rotamer definition (October 22)
+
+A state is now ON if its own chis lie near at least one rotamer of the v2 RBP backbone-independent
+library (bound and unbound pooled, all regions): within 40° on every sp3 chi and within
+max(40°, 2σ_rotamer) on terminal sp2 chis, symmetric groups compared modulo 180°
+(`prdbv3_unbound_rotamer_analysis/off_rotamer.py`, after Lovell et al. 2000). The fixed 40° window
+alone flagged 53 % of GLN and 37 % of GLU because their terminal chis are broad.
+
+| | Interface (n = 5,678) | Non-interface (n = 50,793) |
+|---|---|---|
+| ON→ON | 84.08 % | 86.48 % |
+| OFF→ON | 6.46 % (367) | 5.38 % (2,735) |
+| ON→OFF | 6.97 % (396) | 5.65 % (2,871) |
+| OFF→OFF | 2.48 % | 2.48 % |
+| Mean torsional ΔE (E_U − E_B), OFF→ON / ON→OFF | 0.02 / −0.08 kcal/mol | 0.00 / −0.04 kcal/mol |
+
+Fisher OR for OFF→ON vs ON→OFF, interface vs non-interface: 0.97 (p = 0.73).
+
+| Tolerance (sp3; sp2) | Interface OFF→ON / ON→OFF | Fisher OR (p) | Bound OFF, I vs N; OR (p) |
+|---|---|---|---|
+| 30°; 2σ | 10.42 / 10.78 % | 1.07 (0.26) | 16.0 vs 13.6 %; 1.21 (3.9e-7) |
+| 40°; 2σ (default) | 6.90 / 6.98 % | 1.03 (0.69) | 9.4 vs 8.2 %; 1.17 (7.6e-4) |
+| 50°; 2σ | 3.75 / 3.93 % | 1.01 (0.92) | 5.2 vs 4.9 %; 1.05 (0.39) |
+| 40°; 3σ | 5.65 / 5.42 % | 1.08 (0.37) | 6.8 vs 5.5 %; 1.25 (4.0e-5) |
+
+(The sensitivity rows count every residue with complete chis; the main table also requires the
+backbone torsions used by rota_assign, so its percentages are slightly lower.)
+
+**OFF→ON relaxation is not enriched at the interface at any tolerance.** Both OFF↔ON directions are
+about 1.2× more frequent at the interface, in proportion to its higher overall transition rate
+(analysis 1), and torsional ΔE is near zero in every category. Bound interface residues are slightly
+more often off-rotamer than non-interface ones at tolerances ≤ 40°, but not at 50°.
 
 ## 3. Results
 
