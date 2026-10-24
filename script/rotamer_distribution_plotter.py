@@ -440,18 +440,20 @@ class RBPRotamerDistributionPlotter:
         matrix = np.array(matrix_rows)
 
         fig = plt.figure(figsize=(14, 9))
-        gs = gridspec.GridSpec(3, 1, height_ratios=[1.2, 4, 0.4], hspace=0.15)
+        # Colorbar in a narrow column right of the heatmap, so it cannot collide with the rotated
+        # state labels and x-axis label below the heatmap
+        gs = gridspec.GridSpec(2, 2, height_ratios=[1.2, 4], width_ratios=[1, 0.02], hspace=0.08, wspace=0.02)
 
-        ax_bar = fig.add_subplot(gs[0])
-        ax_heat = fig.add_subplot(gs[1])
-        ax_cbar = fig.add_subplot(gs[2])
+        ax_bar = fig.add_subplot(gs[0, 0])
+        ax_heat = fig.add_subplot(gs[1, 0], sharex=ax_bar)
+        ax_cbar = fig.add_subplot(gs[1, 1])
 
         # 1. Top Bar Chart
         bar_vals = [overall_pct[st] for st in sorted_states]
         bars = ax_bar.bar(range(len(sorted_states)), bar_vals, color="#87ceeb", width=0.8, edgecolor="none")
 
         for idx, val in enumerate(bar_vals):
-            ax_bar.text(idx, val + 0.8, f"{val:.1f}", ha="center", va="bottom", fontsize=11)
+            ax_bar.text(idx, val + 0.8, f"{val:.1f}", ha="center", va="bottom", fontsize=9)
 
         ax_bar.set_xlim(-0.6, len(sorted_states) - 0.4)
         ax_bar.set_ylim(0, max(bar_vals) * 1.25)
@@ -471,8 +473,8 @@ class RBPRotamerDistributionPlotter:
         ax_heat.set_ylabel("Amino acids", fontsize=14, labelpad=10)
         ax_heat.set_xlabel(r"$\chi_1\chi_2$ states", fontsize=15, labelpad=10)
 
-        # 3. Colorbar at bottom
-        cbar = fig.colorbar(im, cax=ax_cbar, orientation="horizontal")
+        # 3. Colorbar at right
+        cbar = fig.colorbar(im, cax=ax_cbar, orientation="vertical")
         cbar.set_label("Percentage", fontsize=12)
         cbar.ax.tick_params(labelsize=12)
 
