@@ -96,15 +96,13 @@ class RBPRotamerDistributionPlotter:
         raw torsion angle JSON file (ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json).
         Recreates all sheets for Figure_2_Tabulated_187.xlsx.
         """
-        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json"
+        # Cleaned torsion dataset (missing angles are empty, not 0.0); a .json path is also accepted
+        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
         if not json_path.exists():
-            logging.error(f"Raw dataset JSON file not found: {json_path}")
-            return None
+            logging.error(f"Torsion dataset not found: {json_path}")
+            return
 
-        try:
-            df = pd.read_json(json_path)
-        except Exception:
-            df = pd.read_json(json_path)
+        df = pd.read_json(json_path) if json_path.suffix.lower() == ".json" else pd.read_csv(json_path)
 
         df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
 
