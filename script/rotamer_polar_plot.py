@@ -18,7 +18,6 @@ import argparse
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 import pandas as pd
 
@@ -54,18 +53,13 @@ class RotamerPlot:
     Unified visualization engine for protein side-chain rotamer analysis.
     """
 
-    # Rotamer colors for polar histograms & stacked distributions
+    # Rotamer state colors, the same as the stacked distribution plots
     ROTAMER_COLORS = {
-        "p": "#440154",  # Deep purple (g+)
-        "t": "#21908c",  # Teal (trans)
-        "m": "#de77ae",  # Magenta (g-)
-        "P": "#9ecae1",  # Light blue-purple (off g+)
-        "T": "#b8de6f",  # Light green (off trans)
-        "M": "#f1a340",  # Light orange (off g-)
+        "T": "#004225", "p": "#B22222", "P": "#FFBF00",
+        "t": "#30BFBF", "M": "#FF4500", "m": "#663399",
     }
-
-    # Custom palette for 6 stacked rotamer states
-    STACKED_PALETTE = ["#004225", "#B22222", "#FFBF00", "#30BFBF", "#FF4500", "#663399"]
+    # Centre angle (degrees) of each 60-degree state sector
+    STATE_CENTERS = {"T": 0.0, "p": 60.0, "P": 120.0, "t": 180.0, "M": -120.0, "m": -60.0}
 
     # Maximum Chi angle depth per residue
     RESIDUE_CHI_MAP = {
@@ -86,11 +80,12 @@ class RotamerPlot:
         excel_file : Path or str, optional
             Path to Figure_2_Tabulated_187.xlsx dataset.
         """
-        self.dataset_file = Path(dataset_file) if dataset_file else DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-        if not self.dataset_file.exists():
-            self.dataset_file = DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+        # Cleaned 187-complex dataset (comma-separated; missing angles empty, not 0.0)
+        self.dataset_file = Path(dataset_file) if dataset_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
 
-        self.excel_file = Path(excel_file) if excel_file else DATASET_DIR / "Figure_2_Tabulated_187.xlsx"
+        # Stacked plots compute their counts from the torsion dataset unless an Excel file is given
+        self.excel_file = Path(excel_file) if excel_file else None
+        self._stacked_plotter = None
         self._df_cache = None
 
     def load_dataset(self):
@@ -133,29 +128,14 @@ class RotamerPlot:
 
     @staticmethod
     def calculate_rotamer_percentages(chi_degrees):
-        """Calculate percentages for on-rotamers (p, t, m) and off-rotamers (P, T, M)."""
-        if len(chi_degrees) == 0:
-            return {"p": 0.0, "t": 0.0, "m": 0.0, "P": 0.0, "T": 0.0, "M": 0.0}
+        """Percentage of angles in each of the six states (boundaries as in classify_chi_state)."""
+        from rotamer_distribution_plotter import RBPRotamerDistributionPlotter
 
-        angles = ((np.array(chi_degrees) + 180.0) % 360.0) - 180.0
-        total = len(angles)
-
-        mask_p = (angles > 30.0) & (angles <= 90.0)
-        mask_t = (angles >= 150.0) | (angles <= -150.0)
-        mask_m = (angles >= -90.0) & (angles < -30.0)
-
-        mask_P = (angles > 90.0) & (angles <= 150.0)
-        mask_T = (angles > -30.0) & (angles < 30.0)
-        mask_M = (angles > -150.0) & (angles <= -90.0)
-
-        return {
-            "p": round(np.sum(mask_p) / total * 100.0, 1),
-            "t": round(np.sum(mask_t) / total * 100.0, 1),
-            "m": round(np.sum(mask_m) / total * 100.0, 1),
-            "P": round(np.sum(mask_P) / total * 100.0, 1),
-            "T": round(np.sum(mask_T) / total * 100.0, 1),
-            "M": round(np.sum(mask_M) / total * 100.0, 1),
-        }
+        states = pd.Series([RBPRotamerDistributionPlotter.classify_chi_state(a) for a in chi_degrees]).dropna()
+        if states.empty:
+            return {k: 0.0 for k in "ptmPTM"}
+        pct = states.value_counts(normalize=True) * 100.0
+        return {k: round(float(pct.get(k, 0.0)), 1) for k in "ptmPTM"}
 
     def plot_polar_histogram(
         self,
@@ -195,9 +175,9 @@ class RotamerPlot:
         fig, ax = plt.subplots(
             nrows=nrows,
             ncols=ncols,
-            figsize=(max(4, ncols * 3.5), max(4, nrows * 3.0)),
+            figsize=(max(4, ncols * 3.6), max(4, nrows * 3.6)),
             subplot_kw={"projection": "polar"},
-            gridspec_kw=dict(wspace=0.35, hspace=0.35),
+            gridspec_kw=dict(wspace=0.55, hspace=0.6),
         )
 
         if nrows == 1 and ncols == 1:
@@ -218,13 +198,14 @@ class RotamerPlot:
                 cur_ax.set_theta_direction(-1)
                 cur_ax.yaxis.grid(False)
                 cur_ax.set_yticks([])
-                cur_ax.set_ylim(0, None)
+                cur_ax.set_ylim(0, 1.05)
+                cur_ax.spines["polar"].set_linewidth(0.8)
 
                 if i == 0:
-                    cur_ax.set_xlabel(resn, labelpad=20, fontsize=12, fontweight="bold")
-                    cur_ax.xaxis.set_label_position("top")
+                    cur_ax.set_title(resn, pad=46, fontsize=12, fontweight="bold")
                 if j == 0:
-                    cur_ax.set_ylabel(r"$\chi_{" + str(chi_i) + r"}$", fontsize=12, fontweight="bold", labelpad=25, style="italic")
+                    cur_ax.text(-0.42, 0.5, r"$\chi_{" + str(chi_i) + r"}$", transform=cur_ax.transAxes,
+                                fontsize=14, ha="center", va="center")
 
                 col_name = f"{state_prefix}_CHI{chi_i}"
                 if col_name in df_res.columns and not df_res[col_name].dropna().empty:
@@ -233,61 +214,39 @@ class RotamerPlot:
 
                     sqrth, _, b = self.calculate_polar_histogram(chi_rad, nbins=36)
 
-                    # Plot light gray base histogram
-                    cur_ax.bar(b, sqrth, width=np.radians(10), alpha=0.3, color="lightgray", zorder=1)
+                    # One colour per state; the state of a 10-degree bin is that of its centre
+                    from rotamer_distribution_plotter import RBPRotamerDistributionPlotter
+                    bin_states = np.array([RBPRotamerDistributionPlotter.classify_chi_state(np.degrees(c)) for c in b])
+                    for rot, color in self.ROTAMER_COLORS.items():
+                        m = bin_states == rot
+                        cur_ax.bar(b[m], sqrth[m], width=np.radians(10), color=color, edgecolor="white",
+                                   linewidth=0.3, zorder=3)
 
-                    # Rotamer masks
-                    mask_p = (b > np.pi / 6) & (b <= np.pi / 2)
-                    mask_t = (b >= 5 * np.pi / 6) | (b <= -5 * np.pi / 6)
-                    mask_m = (b >= -np.pi / 2) & (b < -np.pi / 6)
+                    # State boundaries
+                    for b_ang in np.radians([30, 90, 150, -30, -90, -150]):
+                        cur_ax.axvline(b_ang, color="#9a9a9a", linestyle="--", linewidth=0.7, zorder=2)
 
-                    mask_P_off = (b > np.pi / 2) & (b <= 5 * np.pi / 6)
-                    mask_T_off = (b > -np.pi / 6) & (b < np.pi / 6)
-                    mask_M_off = (b > -5 * np.pi / 6) & (b <= -np.pi / 2)
+                    # Degree labels just outside the circle, state percentages further out
+                    cur_ax.set_xticks(np.radians([0, 90, 180, 270]))  # in [0, 360): ticks outside it shrink the circle
+                    cur_ax.set_xticklabels([r"$0^\circ$", r"$90^\circ$", r"$180^\circ$", r"$-90^\circ$"], fontsize=8, color="#555555")
+                    cur_ax.tick_params(axis="x", pad=1)
+                    cur_ax.xaxis.grid(False)
 
-                    # Bars for on-rotamers
-                    cur_ax.bar(b[mask_p], sqrth[mask_p], width=np.radians(10), alpha=0.9, color=self.ROTAMER_COLORS["p"], zorder=3)
-                    cur_ax.bar(b[mask_t], sqrth[mask_t], width=np.radians(10), alpha=0.9, color=self.ROTAMER_COLORS["t"], zorder=3)
-                    cur_ax.bar(b[mask_m], sqrth[mask_m], width=np.radians(10), alpha=0.9, color=self.ROTAMER_COLORS["m"], zorder=3)
-
-                    # Bars for off-rotamers
-                    cur_ax.bar(b[mask_P_off], sqrth[mask_P_off], width=np.radians(10), alpha=1.0, color=self.ROTAMER_COLORS["P"], zorder=4)
-                    cur_ax.bar(b[mask_T_off], sqrth[mask_T_off], width=np.radians(10), alpha=1.0, color=self.ROTAMER_COLORS["T"], zorder=4)
-                    cur_ax.bar(b[mask_M_off], sqrth[mask_M_off], width=np.radians(10), alpha=1.0, color=self.ROTAMER_COLORS["M"], zorder=4)
-
-                    max_r = np.max(sqrth) if len(sqrth) > 0 else 1.0
                     pcts = self.calculate_rotamer_percentages(chi_vals)
+                    for rot, ang in self.STATE_CENTERS.items():
+                        p = pcts.get(rot, 0.0)
+                        if round(p) < 1:
+                            continue
+                        r = 1.45 if rot in ("T", "t") else 1.28
+                        cur_ax.text(np.radians(ang), r, f"{rot} {p:.0f}%", fontsize=8.5, fontweight="bold",
+                                    color=self.ROTAMER_COLORS[rot], ha="center", va="center", clip_on=False)
 
-                    # Annotations
-                    annot_on = {"p": (np.radians(60), max_r * 0.7), "t": (np.pi, max_r * 0.7), "m": (np.radians(-60), max_r * 0.7)}
-                    annot_off = {"P": (np.radians(120), max_r * 0.6), "T": (np.radians(-5), max_r * 0.6), "M": (np.radians(-120), max_r * 0.6)}
-
-                    for rot, (ang, rad) in annot_on.items():
-                        p = pcts.get(rot, 0)
-                        if p > 1.0:
-                            cur_ax.annotate(f"{rot} {p:.0f}%", fontsize=8, fontweight="bold", xy=(ang, rad), ha="center", va="center")
-
-                    for rot, (ang, rad) in annot_off.items():
-                        p = pcts.get(rot, 0)
-                        if p > 0.5:
-                            cur_ax.annotate(f"{rot} {p:.0f}%", fontsize=8, fontweight="bold", xy=(ang, rad), ha="center", va="center")
-
-                    # Angle ticks
-                    tick_locs = [0, np.pi / 2, np.pi, 3 * np.pi / 2]
-                    tick_labs = [r"$0^\circ$", r"$90^\circ$", r"$180^\circ$", r"$-90^\circ$"]
-                    cur_ax.set_xticks(tick_locs)
-                    cur_ax.set_xticklabels(tick_labs, fontsize=8)
-
-                    # Boundary lines
-                    for b_ang in [np.pi / 6, np.pi / 2, 5 * np.pi / 6, -np.pi / 6, -np.pi / 2, -5 * np.pi / 6]:
-                        cur_ax.axvline(b_ang, color="darkgray", linestyle="--", alpha=0.7)
-
-        fig.subplots_adjust(top=0.92, bottom=0.08, wspace=0.35, hspace=0.35)
+        fig.subplots_adjust(top=0.9, bottom=0.06, left=0.1, right=0.95, wspace=0.55, hspace=0.6)
 
         if save_path:
             out_p = Path(save_path)
             out_p.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(out_p, dpi=300, bbox_inches="tight", facecolor="white")
+            fig.savefig(out_p, dpi=600, bbox_inches="tight", facecolor="white")
             logging.info(f"Saved polar histogram plot: {out_p}")
 
         plt.close(fig)
@@ -296,70 +255,13 @@ class RotamerPlot:
     # 2. STACKED ROTAMER DISTRIBUTION PLOTS
     # =========================================================================
     def plot_stacked_distribution(self, chi_level=1, sasa_type="int", save_path=None):
-        """Plot 100% stacked bar chart for rotamer state distributions."""
-        excel_path = self.excel_file
-        if not excel_path.exists():
-            logging.error(f"Excel file not found: {excel_path}")
-            return
+        """100% stacked B/U rotamer state bars; same figure as rotamer_distribution_plotter.py."""
+        from rotamer_distribution_plotter import RBPRotamerDistributionPlotter
 
-        sheet_name = f"chi{chi_level}_{sasa_type}"
-        try:
-            df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        except Exception as e:
-            logging.error(f"Could not load sheet {sheet_name}: {e}")
-            return
-
-        rot_cols = ["T", "p", "P", "t", "M", "m"]
-        need_cols = ["Amino_acid", "forms"] + rot_cols
-        df_sub = df[need_cols].copy()
-        df_sub["Amino_acid"] = df_sub["Amino_acid"].astype(str).str.replace(r"_[IN]$", "", regex=True)
-
-        df_grouped = df_sub.groupby(["Amino_acid", "forms"]).sum(numeric_only=True)
-        row_totals = df_grouped.sum(axis=1)
-        df_percent = df_grouped.div(row_totals.replace(0, np.nan), axis=0) * 100.0
-
-        group_labels = list(df_percent.index.get_level_values(0).unique())
-        bound_unbound_labels = ["B", "U"]
-        aa_count = len(group_labels)
-
-        xticks_major = [i * 2 + 0.5 for i in range(aa_count)]
-        xticks_minor = [i for i in range(aa_count * 2)]
-
-        fig, ax = plt.subplots(figsize=(max(8, aa_count * 0.75), 6))
-        bar_width = 0.8
-        bottoms = [0.0] * len(df_percent)
-
-        for i, col in enumerate(rot_cols):
-            vals = df_percent[col].values
-            ax.bar(range(len(df_percent)), vals, bar_width, label=col, bottom=bottoms, color=self.STACKED_PALETTE[i], zorder=2)
-            bottoms = [b + v for b, v in zip(bottoms, vals)]
-
-        ax.set_xticks(xticks_major)
-        ax.set_xticklabels(group_labels, fontsize=12, fontweight="bold", rotation=0, ha="center")
-
-        for i, tick in enumerate(xticks_minor):
-            label = bound_unbound_labels[i % 2]
-            ax.text(tick, -7.0, label, ha="center", va="top", fontsize=11, color="black", rotation=0)
-
-        ax.set_ylim(0, 100)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True, nbins=6))
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{int(y)}%"))
-        ax.set_ylabel("Rotamer Percentage (%)", fontsize=13, fontweight="bold")
-
-        sasa_title = "Interface" if sasa_type == "int" else "Non-Interface"
-        ax.set_title(f"$\chi_{chi_level}$ Rotamer Distribution ({sasa_title} Residues)", fontsize=14, fontweight="bold", pad=15)
-        ax.legend(ncols=6, loc="upper right", bbox_to_anchor=(1.0, 1.14), fancybox=True, shadow=True, fontsize=11)
-        ax.grid(axis="y", linestyle="-", alpha=0.7, zorder=0)
-
-        plt.tight_layout()
-
-        if save_path:
-            out_p = Path(save_path)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(out_p, dpi=300, bbox_inches="tight")
-            logging.info(f"Saved stacked distribution plot: {out_p}")
-
-        plt.close(fig)
+        if self._stacked_plotter is None:
+            excel = self.excel_file if self.excel_file is not None and self.excel_file.exists() else None
+            self._stacked_plotter = RBPRotamerDistributionPlotter(excel_file=excel)
+        self._stacked_plotter.plot_stacked_distribution(chi_level=chi_level, sasa_type=sasa_type, save_path=save_path)
 
     # =========================================================================
     # 3. TRANSITION MATRIX HEATMAP PLOTS

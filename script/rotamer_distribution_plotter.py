@@ -25,6 +25,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATASET_DIR = ROOT_DIR / "input_files"
+TORSION_DATASET = DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
 RESULTS_DIR = ROOT_DIR / "output_files" / "rotamer_distribution"
 FIGURES_DIR = ROOT_DIR / "figure" / "rotamer_distribution"
 ALT_FIGURES_DIR = ROOT_DIR / "figures" / "rotamer_distribution"
@@ -50,16 +51,21 @@ class RBPRotamerDistributionPlotter:
     ROTAMER_COLUMNS = ["T", "p", "P", "t", "M", "m"]
     COLOR_PALETTE = ["#004225", "#B22222", "#FFBF00", "#30BFBF", "#FF4500", "#663399"]
 
-    def __init__(self, excel_file=None):
+    def __init__(self, excel_file=None, dataset_file=None):
         """
         Initialize RBPRotamerDistributionPlotter.
 
         Parameters:
         -----------
         excel_file : Path or str, optional
-            Path to Figure_2_Tabulated_187.xlsx dataset.
+            Pre-tabulated counts (one sheet per chi and region, e.g. Figure_2_Tabulated_187.xlsx).
+            By default the counts are computed from the cleaned torsion dataset instead.
+        dataset_file : Path or str, optional
+            Torsion dataset; default input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv.
         """
-        self.excel_file = Path(excel_file) if excel_file else DATASET_DIR / "Figure_2_Tabulated_187.xlsx"
+        self.excel_file = Path(excel_file) if excel_file else None
+        self.dataset_file = Path(dataset_file) if dataset_file else TORSION_DATASET
+        self._tables = None
 
     @staticmethod
     def classify_chi_state(angle_deg):
@@ -90,19 +96,24 @@ class RBPRotamerDistributionPlotter:
             return "m"
         return None
 
+    @staticmethod
+    def read_torsion_dataset(path):
+        """Torsion dataset (.json, or the comma-separated *_clean.tsv with missing angles empty)."""
+        path = Path(path)
+        return pd.read_json(path) if path.suffix.lower() == ".json" else pd.read_csv(path)
+
     def calculate_rotamer_tables_from_json(self, json_file=None, output_excel=None):
         """
-        Calculate rotamer state counts and percentage distributions directly from
-        raw torsion angle JSON file (ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json).
-        Recreates all sheets for Figure_2_Tabulated_187.xlsx.
+        Rotamer state counts per chi, region (int / nonint), amino acid and form (B / U), in the
+        sheet layout of Figure_2_Tabulated_187.xlsx. Only residues with the chi present in both the
+        bound and the unbound structure are counted, so B and U bars of a residue type share one total.
         """
-        # Cleaned torsion dataset (missing angles are empty, not 0.0); a .json path is also accepted
-        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-        if not json_path.exists():
-            logging.error(f"Torsion dataset not found: {json_path}")
-            return
+        data_path = Path(json_file) if json_file else self.dataset_file
+        if not data_path.exists():
+            logging.error(f"Torsion dataset not found: {data_path}")
+            return None
 
-        df = pd.read_json(json_path) if json_path.suffix.lower() == ".json" else pd.read_csv(json_path)
+        df = self.read_torsion_dataset(data_path)
 
         df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
 
@@ -124,6 +135,9 @@ class RBPRotamerDistributionPlotter:
                 rows = []
                 for aa in chi_map[chi]:
                     aa_df = sub_df[sub_df["Amino_acid"] == aa]
+                    pair_cols = [f"B_CHI{chi}", f"U_CHI{chi}"]
+                    if all(c in aa_df.columns for c in pair_cols):
+                        aa_df = aa_df.dropna(subset=pair_cols)
 
                     for form, prefix in [("B", "B_"), ("U", "U_")]:
                         col = f"{prefix}CHI{chi}"
@@ -167,7 +181,8 @@ class RBPRotamerDistributionPlotter:
 
     def load_sheet(self, sheet_name):
         """
-        Load a specific sheet from the Excel dataset.
+        Counts table for one sheet: from the Excel file if one was given, else computed from the
+        torsion dataset.
 
         Parameters:
         -----------
@@ -178,6 +193,11 @@ class RBPRotamerDistributionPlotter:
         --------
         pd.DataFrame or None
         """
+        if self.excel_file is None:
+            if self._tables is None:
+                self._tables = self.calculate_rotamer_tables_from_json() or {}
+            return self._tables.get(sheet_name)
+
         if not self.excel_file.exists():
             logging.error(f"Excel dataset file not found at {self.excel_file}")
             return None
@@ -233,66 +253,68 @@ class RBPRotamerDistributionPlotter:
         row_totals = df_grouped.sum(axis=1)
         df_percent = df_grouped.div(row_totals.replace(0, np.nan), axis=0) * 100.0
 
-        # Unique amino acids and form labels
         group_labels = list(df_percent.index.get_level_values(0).unique())
-        bound_unbound_labels = ["B", "U"]
+        df_percent = df_percent.reindex(
+            pd.MultiIndex.from_product([group_labels, ["B", "U"]], names=df_percent.index.names)
+        )
+        totals = df_grouped.sum(axis=1).reindex(df_percent.index)
         amino_acid_count = len(group_labels)
 
-        # Calculate tick positions for double-bars (B and U)
-        xticks_major = [i * 2 + 0.5 for i in range(amino_acid_count)]
-        xticks_minor = [i for i in range(amino_acid_count * 2)]
+        # B and U bars of a residue type side by side, with a gap between residue types
+        group_step, bar_width = 2.5, 0.9
+        centers = np.arange(amino_acid_count) * group_step
+        x = np.ravel(np.column_stack([centers - 0.5, centers + 0.5]))
 
-        fig, ax = plt.subplots(figsize=(max(8, amino_acid_count * 0.75), 6))
-        bar_width = 0.8
-        bottoms = [0.0] * len(df_percent)
+        # Constant bar width in inches; figures with few residue types keep a minimum width for
+        # the title and legend and pad the x-axis instead of widening the bars
+        fig_width = max(3.8, 0.66 * amino_acid_count + 1.6)
+        groups_shown = max(amino_acid_count, (fig_width - 1.6) / 0.66)
+        fig, ax = plt.subplots(figsize=(fig_width, 5.2))
+        bottoms = np.zeros(len(df_percent))
 
-        # Plot stacked bars for each rotamer state
         for i, col in enumerate(self.ROTAMER_COLUMNS):
-            vals = df_percent[col].values
-            ax.bar(
-                range(len(df_percent)),
-                vals,
-                bar_width,
-                label=col,
-                bottom=bottoms,
-                color=self.COLOR_PALETTE[i],
-                zorder=2,
-            )
-            bottoms = [b + v for b, v in zip(bottoms, vals)]
+            vals = np.nan_to_num(df_percent[col].to_numpy(float))
+            ax.bar(x, vals, bar_width, label=col, bottom=bottoms, color=self.COLOR_PALETTE[i],
+                   edgecolor="white", linewidth=0.4, zorder=2)
+            bottoms += vals
 
-        # Set major ticks (amino acid labels)
-        ax.set_xticks(xticks_major)
-        ax.set_xticklabels(group_labels, fontsize=12, fontweight="bold", rotation=0, ha="center")
+        # Residue counts above each pair (B and U totals are equal: paired residues)
+        for c, aa in zip(centers, group_labels):
+            n = int(np.nanmax(totals.loc[aa].to_numpy(float)))
+            ax.text(c, 101.5, f"n={n}", ha="center", va="bottom", fontsize=8, color="#444444")
 
-        # Add minor text labels for 'B' and 'U' below each bar
-        for i, tick in enumerate(xticks_minor):
-            label = bound_unbound_labels[i % 2]
-            ax.text(tick, -7.0, label, ha="center", va="top", fontsize=11, color="black", rotation=0)
+        # B / U under each bar (minor ticks), residue names below them (major ticks)
+        ax.set_xticks(x, minor=True)
+        ax.set_xticklabels(["B", "U"] * amino_acid_count, minor=True)
+        ax.set_xticks(centers)
+        ax.set_xticklabels(group_labels, fontweight="bold")
+        # Sizes via tick_params: a fontsize passed to set_xticklabels is not applied to tick
+        # objects matplotlib creates later, which left the last labels larger
+        ax.tick_params(axis="x", which="major", length=0, pad=16, labelsize=11)
+        ax.tick_params(axis="x", which="minor", length=0, pad=3, labelsize=9)
+        half_span = (groups_shown - 1) * group_step / 2 + 1.3
+        ax.set_xlim(centers.mean() - half_span, centers.mean() + half_span)
 
-        # Y-axis formatting
         ax.set_ylim(0, 100)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True, nbins=6))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{int(y)}%"))
-        plt.setp(ax.get_yticklabels(), fontsize=12)
-        ax.set_ylabel("Rotamer Percentage (%)", fontsize=13, fontweight="bold")
+        ax.tick_params(axis="y", labelsize=11)
+        ax.set_ylabel("Residues (%)", fontsize=12, fontweight="bold")
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
 
+        # Title, then a one-row legend between the title and the axes
         sasa_title = "Interface" if sasa_type == "int" else "Non-Interface"
-        ax.set_title(f"$\chi_{chi_level}$ Rotamer Distribution ({sasa_title} Residues)", fontsize=14, fontweight="bold", pad=15)
+        narrow = fig_width < 6
+        title_sep = "\n" if narrow else " "
+        ax.set_title(rf"$\chi_{chi_level}$ Rotamer Distribution{title_sep}({sasa_title} Residues)",
+                     fontsize=13, fontweight="bold", pad=50 if narrow else 34)
+        ax.legend(ncols=3 if narrow else len(self.ROTAMER_COLUMNS), loc="lower center", bbox_to_anchor=(0.5, 1.04),
+                  frameon=False, fontsize=10, handlelength=1.2, columnspacing=1.2)
 
-        # Legend
-        ax.legend(
-            ncols=len(self.ROTAMER_COLUMNS),
-            loc="upper right",
-            bbox_to_anchor=(1.0, 1.14),
-            fancybox=True,
-            shadow=True,
-            fontsize=11,
-        )
+        ax.grid(axis="y", linestyle="-", alpha=0.35, which="major", zorder=0)
 
-        # Y-grid lines
-        ax.grid(axis="y", linestyle="-", alpha=0.7, which="major", zorder=0)
-
-        plt.tight_layout()
+        fig.tight_layout()
 
         # Determine file output path
         if save_path:
@@ -301,7 +323,7 @@ class RBPRotamerDistributionPlotter:
             out_path = Path(figures_dir) / f"side_chain_chi{chi_level}_{sasa_type}.png"
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(out_path, bbox_inches="tight", dpi=300)
+        fig.savefig(out_path, bbox_inches="tight", dpi=600)
         logging.info(f"Saved rotamer distribution plot: {out_path}")
 
         # Also save to secondary figures directory
@@ -383,20 +405,12 @@ class RBPRotamerDistributionPlotter:
         """
         import matplotlib.gridspec as gridspec
 
-        json_path = Path(json_file) if json_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json"
-        if not json_path.exists():
-            json_path = DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
-
-        if not json_path.exists():
-            logging.error(f"Raw dataset TSV file not found: {json_path}")
+        data_path = Path(json_file) if json_file else self.dataset_file
+        if not data_path.exists():
+            logging.error(f"Torsion dataset not found: {data_path}")
             return
 
-        try:
-            df = pd.read_json(json_path)
-            if "LABEL" not in df.columns:
-                df = pd.read_json(json_path)
-        except Exception:
-            df = pd.read_json(json_path)
+        df = self.read_torsion_dataset(data_path)
 
         df["Amino_acid"] = df["LABEL"].astype(str).str[:3]
 
@@ -511,9 +525,11 @@ def main():
     parser.add_argument(
         "--excel-file",
         type=Path,
-        default=DATASET_DIR / "Figure_2_Tabulated_187.xlsx",
-        help="Path to Figure_2_Tabulated_187.xlsx dataset file.",
+        default=None,
+        help="Pre-tabulated counts (e.g. input_files/Figure_2_Tabulated_187.xlsx); default: compute from --dataset-file.",
     )
+    parser.add_argument("--dataset-file", type=Path, default=TORSION_DATASET, help="Torsion angle dataset.")
+    parser.add_argument("--export-tables", type=Path, default=None, help="Also write the computed counts to this .xlsx file.")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for summary CSV tables.")
     parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output directory for figure plots.")
     parser.add_argument("--chi-level", type=str, default="all", choices=["1", "2", "3", "4", "5", "all"], help="Chi angle level (1..5 or 'all').")
@@ -522,7 +538,9 @@ def main():
 
     args = parser.parse_args()
 
-    plotter = RBPRotamerDistributionPlotter(excel_file=args.excel_file)
+    plotter = RBPRotamerDistributionPlotter(excel_file=args.excel_file, dataset_file=args.dataset_file)
+    if args.export_tables:
+        plotter.calculate_rotamer_tables_from_json(output_excel=args.export_tables)
 
     if args.plot_heatmap:
         plotter.plot_chi1_chi2_heatmap(figures_dir=args.figures_dir)
