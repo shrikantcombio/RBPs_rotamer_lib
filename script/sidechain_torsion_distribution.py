@@ -27,7 +27,9 @@ Outputs (output_files/sidechain_distributions/):
   rotamer_validation_summary.csv  per state, region (I / N / C / all) and residue type
 Figures (figure(s)/sidechain_distributions/):
   <group>_CHI_distribution.png     chi histograms, bound (filled) vs unbound (outline), with the
-                                   Top8000 rotamer centres (frequency >= 1%) marked
+                                   Top8000 rotamer centres (frequency >= 1%) marked. Heights are %
+                                   of residues per 10 degrees (5-degree bins doubled); the chis of
+                                   a residue type share one y-range, except ARG chi5 (own scale)
   per_residue/<AA>_CHI_distribution.png   the same, one figure per residue type
   chi1_chi2/<AA>_{B,U}_chi1_chi2.png  chi1 vs chi2 scatter in the manuscript style over the Top8000
                                    favored / allowed regions (for residues with more chis, the
@@ -204,20 +206,34 @@ def top8000_centres(aa, k, min_freq=1.0):
     return out
 
 
+Y_LABEL = "Residues (% per 10°)"
+
+
+def own_y_scale(aa, k):
+    """ARG chi5 (a single spike holding nearly all residues) gets its own y-axis."""
+    return aa == "ARG" and k == 5
+
+
 def chi_panel(ax, sub, aa, k, with_residue=True):
-    """Bound (filled) vs unbound (outline) histogram of chi k of residue type `aa`."""
+    """
+    Bound (filled) vs unbound (outline) histogram of chi k of residue type `aa`; returns the
+    tallest bar. Heights are % of the residues per 10 degrees (a 5-degree bin's % doubled), so
+    panels with 5- and 10-degree bins share one unit.
+    """
     low, high, period = display_range(aa, k)
     width = 5.0 if period == 180 or aa == "PRO" else 10.0
     bins = np.arange(low, high + width / 2, width)
+    top = 0.0
     for s, color, kw in (("B", BOUND_COLOR, dict(histtype="stepfilled", alpha=0.35)),
                          ("U", UNBOUND_COLOR, dict(histtype="step", linewidth=1.4))):
         vals = display_angles(aa, k, sub[f"{s}_CHI{k}"].dropna())
-        weights = np.full(len(vals), 100.0 / max(len(vals), 1))
-        ax.hist(vals, bins=bins, weights=weights, color=color, **kw)
+        weights = np.full(len(vals), 100.0 / max(len(vals), 1) * (10.0 / width))
+        heights, _, _ = ax.hist(vals, bins=bins, weights=weights, color=color, **kw)
+        top = max(top, float(np.max(heights)) if len(heights) else 0.0)
     for c in top8000_centres(aa, k):
         ax.axvline(c, color=MUTED_COLOR, linewidth=0.6, linestyle=":", zorder=0)
     n = sub[[f"B_CHI{k}", f"U_CHI{k}"]].notna().all(axis=1).sum()
-    note = " (planarity, mod 180°)" if aa == "ARG" and k == 5 else (" (mod 180°)" if period == 180 else "")
+    note = " (planarity, mod 180°)" if own_y_scale(aa, k) else (" (mod 180°)" if period == 180 else "")
     ax.set_title((f"{aa} " if with_residue else "") + rf"$\chi_{k}${note}", fontsize=10, pad=14)
     ax.text(0.5, 1.01, f"n = {n:,}", transform=ax.transAxes, ha="center", va="bottom", fontsize=7,
             color=MUTED_COLOR)
@@ -227,6 +243,19 @@ def chi_panel(ax, sub, aa, k, with_residue=True):
     ax.tick_params(labelsize=8)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    return top
+
+
+def share_y(panels):
+    """One y-range for the panels of a residue type; ARG chi5 keeps its own (labelled)."""
+    shared = [top for ax, aa, k, top in panels if not own_y_scale(aa, k)]
+    ymax = 1.05 * max(shared) if shared else None
+    for ax, aa, k, top in panels:
+        if own_y_scale(aa, k):
+            ax.set_ylim(0, 1.05 * top)
+            ax.set_ylabel(Y_LABEL + ", own scale", fontsize=9)
+        elif ymax:
+            ax.set_ylim(0, ymax)
 
 
 def legend_handles():
@@ -245,13 +274,15 @@ def plot_group(df, name, residues, region):
                              squeeze=False)
     for row, aa in enumerate(residues):
         sub = df[df["AA"] == aa]
+        panels = []
         for col in range(n_cols):
             if col + 1 > CHI_COUNTS[aa]:
                 axes[row, col].axis("off")
                 continue
-            chi_panel(axes[row, col], sub, aa, col + 1)
+            panels.append((axes[row, col], aa, col + 1, chi_panel(axes[row, col], sub, aa, col + 1)))
             if col == 0:
-                axes[row, col].set_ylabel("Residues (%)", fontsize=9)
+                axes[row, col].set_ylabel(Y_LABEL, fontsize=9)
+        share_y(panels)
     fig.tight_layout(rect=(0, 0, 1, 0.94 if len(residues) > 1 else 0.86))
     fig.legend(handles=legend_handles(), loc="lower center", ncol=3, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, 0.94 if len(residues) > 1 else 0.86))
@@ -271,13 +302,15 @@ def plot_residue(df, aa, region, max_cols=3):
     height = 3.0 * n_rows + title_h + legend_h
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(width, height), squeeze=False)
     sub = df[df["AA"] == aa]
+    panels = []
     for i, ax in enumerate(axes.flat):
         if i >= n_chi:
             ax.axis("off")
             continue
-        chi_panel(ax, sub, aa, i + 1, with_residue=False)
+        panels.append((ax, aa, i + 1, chi_panel(ax, sub, aa, i + 1, with_residue=False)))
         if i % n_cols == 0:
-            ax.set_ylabel("Residues (%)", fontsize=9)
+            ax.set_ylabel(Y_LABEL, fontsize=9)
+    share_y(panels)
     fig.tight_layout(rect=(0, legend_h / height, 1, 1 - title_h / height))
     fig.legend(handles=legend_handles(), loc="lower center", ncol=legend_cols, frameon=False, fontsize=8,
                bbox_to_anchor=(0.5, 0.0))
