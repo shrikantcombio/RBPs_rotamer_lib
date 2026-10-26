@@ -16,6 +16,7 @@ Usage:
 import argparse
 import logging
 import json
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -26,10 +27,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-INPUT_DIR = ROOT_DIR / "input_files"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 OUTPUT_DIR = ROOT_DIR / "output_files"
 
-INPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Gas constant * Temperature (RT in kcal/mol at ~298 K)
@@ -142,10 +143,22 @@ def torsion_potential_amber(theta_deg, K_theta, m, delta_deg):
     return K_theta * (1.0 + np.cos(m * theta_rad + delta_rad))
 
 
+def _angle(row, col):
+    """Angle in degrees, or NaN when the column is missing or empty."""
+    try:
+        return float(row.get(col))
+    except (TypeError, ValueError):
+        return float("nan")
+
+
 def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=True):
     """
     Calculates unbound torsional energy (E_U), bound torsional energy (E_B),
     and energy difference (DeltaE = E_U - E_B) for a single residue row containing Phi, Psi, Chi1..Chi5.
+
+    A torsion contributes only when it is defined in both the bound and the unbound structure, so
+    E_U and E_B always sum over the same torsions (undefined angles are NaN in the dataset: chain
+    ends and breaks, missing atoms, no unbound partner).
     """
     K_phi = 0.8
     K_psi = 0.4
@@ -162,13 +175,12 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
     e_b_bb = 0.0
 
     if include_backbone and res_name != "GLY":
-        u_phi = float(row.get("U_PHI", row.get("B_PHI", 0.0)))
-        u_psi = float(row.get("U_PSI", row.get("B_PSI", 0.0)))
-        b_phi = float(row.get("B_PHI", 0.0))
-        b_psi = float(row.get("B_PSI", 0.0))
-
-        e_u_bb = pot_fn(u_phi, K_phi, m_phi, delta_phi) + pot_fn(u_psi, K_psi, m_psi, delta_psi)
-        e_b_bb = pot_fn(b_phi, K_phi, m_phi, delta_phi) + pot_fn(b_psi, K_psi, m_psi, delta_psi)
+        for name, k, m, d in (("PHI", K_phi, m_phi, delta_phi), ("PSI", K_psi, m_psi, delta_psi)):
+            u_ang, b_ang = _angle(row, f"U_{name}"), _angle(row, f"B_{name}")
+            if np.isnan(u_ang) or np.isnan(b_ang):
+                continue
+            e_u_bb += pot_fn(u_ang, k, m, d)
+            e_b_bb += pot_fn(b_ang, k, m, d)
 
     e_u_sc = 0.0
     e_b_sc = 0.0
@@ -180,8 +192,9 @@ def calculate_residue_torsion_energy(row, force_field="amber", include_backbone=
                 u_col = f"U_{chi_name}"
                 b_col = f"B_{chi_name}"
 
-                u_ang = float(row.get(u_col, 0.0))
-                b_ang = float(row.get(b_col, 0.0))
+                u_ang, b_ang = _angle(row, u_col), _angle(row, b_col)
+                if np.isnan(u_ang) or np.isnan(b_ang):
+                    continue
 
                 k_val = params[chi_name][1] / params[chi_name][0]
                 d_val = params[chi_name][2]
@@ -297,8 +310,8 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=INPUT_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.tsv",
-        help="Path to backbone & sidechain torsion angle dataset file.",
+        default=TORSION_DATASET,
+        help="Torsion angle dataset (default: the 187-complex bound/unbound JSON).",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR, help="Output directory for energy files.")
     parser.add_argument("--force-field", type=str, default="amber", choices=["charmm", "amber"], help="Force field energy function formulation.")
@@ -310,7 +323,7 @@ def main():
         logging.error(f"Input file not found: {args.input_file}")
         return
 
-    df_torsion = pd.read_csv(args.input_file, sep="\t", keep_default_na=False)
+    df_torsion = load_torsion_dataset(args.input_file)
     logging.info(f"Loaded dataset with {len(df_torsion)} residue entries from {args.input_file}")
 
     # 1. PDB Level Energies
