@@ -19,6 +19,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -26,6 +27,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import rotamer_definitions as rotdef
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -370,7 +374,7 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
+        default=TORSION_DATASET,
         help="Path to dataset containing backbone & sidechain torsion angles.",
     )
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for transition matrix CSV files.")
@@ -388,13 +392,7 @@ def main():
         logging.error(f"Input file not found: {args.input_file}")
         return
 
-    # Load dataset
-    try:
-        df = pd.read_csv(args.input_file, sep=",")
-        if "LABEL" not in df.columns:
-            df = pd.read_csv(args.input_file, sep="\t")
-    except Exception:
-        df = pd.read_csv(args.input_file, sep="\t")
+    df = load_torsion_dataset(args.input_file)
 
     logging.info(f"Loaded dataset with {len(df)} residue entries.")
 
