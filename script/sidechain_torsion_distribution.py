@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -24,7 +25,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 RESULTS_DIR = ROOT_DIR / "output_files"
 FIGURES_DIR = ROOT_DIR / "figures" / "sidechain_distributions"
 
@@ -76,7 +78,7 @@ def get_max_bin_info(data_series, num_bins=36, angle_range=(-180, 180)):
     """
     Find the bin with maximum frequency count and compute member statistics.
     """
-    valid_data = data_series.dropna()
+    valid_data = pd.Series(data_series, dtype=float).dropna()
     valid_data = valid_data[(valid_data >= angle_range[0]) & (valid_data <= angle_range[1])]
 
     if len(valid_data) == 0:
@@ -379,7 +381,7 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187.json",
+        default=TORSION_DATASET,
         help="Path to dataset containing backbone & sidechain torsion angles.",
     )
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV summary files.")
@@ -396,11 +398,7 @@ def main():
         logging.error(f"Input file not found: {args.input_file}")
         return
 
-    # Load dataset
-    try:
-        df = pd.read_csv(args.input_file, sep=",")
-    except Exception:
-        df = pd.read_csv(args.input_file, sep="\t")
+    df = load_torsion_dataset(args.input_file)
 
     logging.info(f"Loaded dataset with {len(df)} residue entries.")
 
