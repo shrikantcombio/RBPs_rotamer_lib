@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -22,6 +23,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATASET_DIR = ROOT_DIR / "input_files"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 RESULTS_DIR = ROOT_DIR / "output_files"
 PRDBV3_DIR = ROOT_DIR / "PRDBv3_dataset" / "PRDBv3.0"
 
@@ -171,7 +174,13 @@ def classify_omega_angle(omega):
 
 def collect_cispep_from_omega_torsions(torsion_file_path, residue_filter="PRO", output_csv=None):
     """
-    Extract cis-peptide candidates from backbone omega torsion angle datasets.
+    Cis/trans classification of peptide bonds from the torsion dataset.
+
+    OMEGA of residue i is the bond C(i)-N(i+1) (IUPAC), so the X-Pro bond of a residue type
+    filter is the OMEGA of the preceding residue (CONTEXT 'PREV_RESIDUE', counted); the filtered
+    residue's own row (CONTEXT 'TARGET_RESIDUE', the bond after it) is kept for context only.
+    A preceding row is used only when it is in the same complex and chain; undefined omega
+    (chain end or break) is 'Unknown'.
     """
     logging.info(f"Reading omega torsion angles from: {torsion_file_path}")
     torsion_path = Path(torsion_file_path)
@@ -180,13 +189,7 @@ def collect_cispep_from_omega_torsions(torsion_file_path, residue_filter="PRO", 
         logging.error(f"Torsion file not found: {torsion_path}")
         return pd.DataFrame()
 
-    # Determine file separator: try comma first if .csv or if comma in header, fallback to tab
-    try:
-        df_torsion = pd.read_csv(torsion_path, sep=",")
-        if "LABEL" not in df_torsion.columns:
-            df_torsion = pd.read_csv(torsion_path, sep="\t")
-    except Exception:
-        df_torsion = pd.read_csv(torsion_path, sep="\t")
+    df_torsion = load_torsion_dataset(torsion_path)
 
     if "LABEL" not in df_torsion.columns or "B_OMEGA" not in df_torsion.columns:
         logging.error(f"Required columns ('LABEL', 'B_OMEGA') not found in {torsion_path}")
@@ -200,12 +203,14 @@ def collect_cispep_from_omega_torsions(torsion_file_path, residue_filter="PRO", 
     # Filter residues if requested
     if residue_filter and residue_filter.upper() != "ALL":
         target_res = residue_filter.upper()
-        res_indices = df_torsion[df_torsion["LABEL"].str.contains(target_res, na=False)].index
+        chain = df_torsion["LABEL"].str.split().str[1]
+        prev_same_chain = (df_torsion["PDB"].shift(1) == df_torsion["PDB"]) & (chain.shift(1) == chain)
+        res_indices = df_torsion.index[df_torsion["LABEL"].str[:3] == target_res]
 
         matched_rows = []
         for idx in res_indices:
-            # Include previous row in the sequence for peptide context if available
-            if idx > 0:
+            # The preceding residue carries the X-target peptide bond
+            if prev_same_chain[idx]:
                 prev_row = df_torsion.iloc[idx - 1].copy()
                 prev_row["CONTEXT"] = "PREV_RESIDUE"
                 matched_rows.append(prev_row)
@@ -221,10 +226,11 @@ def collect_cispep_from_omega_torsions(torsion_file_path, residue_filter="PRO", 
 
     logging.info(f"Collected {len(df_filtered)} residue rows matching filter '{residue_filter}'.")
 
-    # Count cis vs trans
-    cis_count_b = (df_filtered["B_CIS_TRANS"] == "cis").sum()
-    trans_count_b = (df_filtered["B_CIS_TRANS"] == "trans").sum()
-    logging.info(f"Bound state conformation counts - Cis: {cis_count_b}, Trans: {trans_count_b}")
+    # Count cis vs trans over peptide bonds: the X-target bonds, or every bond without a filter
+    bonds = df_filtered[df_filtered["CONTEXT"] != "TARGET_RESIDUE"]
+    for state in [s for s in ("B", "U") if f"{s}_CIS_TRANS" in bonds.columns]:
+        counts = bonds[f"{state}_CIS_TRANS"].value_counts().to_dict()
+        logging.info(f"{'Bound' if state == 'B' else 'Unbound'} peptide bonds: {counts}")
 
     if output_csv and not df_filtered.empty:
         df_filtered.to_csv(output_csv, index=False)
@@ -237,7 +243,7 @@ def main():
     parser = argparse.ArgumentParser(description="Collect and analyze cis-peptide information from PDB files and Omega torsion angles.")
     parser.add_argument("--pdb-dir", type=Path, default=PRDBV3_DIR, help="Path to PDB dataset directory.")
     parser.add_argument("--json-list", type=Path, default=DATASET_DIR / "PRDBv3_pdbList_chains.json", help="Path to JSON file containing PDB chain mappings.")
-    parser.add_argument("--torsion-file", type=Path, default=DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv", help="Path to backbone torsion angles dataset file.")
+    parser.add_argument("--torsion-file", type=Path, default=TORSION_DATASET, help="Torsion angle dataset (default: the 187-complex bound/unbound JSON).")
     parser.add_argument("--residue", type=str, default="PRO", help="Residue type to filter in torsion angle analysis (e.g. PRO, ALL).")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV results.")
 
