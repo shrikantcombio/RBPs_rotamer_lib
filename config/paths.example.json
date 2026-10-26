@@ -5,5 +5,6 @@
   "protein_protein_dir": "../protein-protein",
   "nr288_dir": "/path/to/nr_288_PRDBv3.0",
   "prince_bin": "/path/to/PRince/bin/prince",
-  "torsion_dataset": "output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.json"
+  "torsion_dataset": "output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.json",
+  "molprobity_reference_dir": "/path/to/reference_data"
 }

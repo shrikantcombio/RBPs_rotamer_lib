@@ -2,646 +2,268 @@
 """
 ramachandran_plot.py
 
-Refactored Ramachandran Plot Analysis and Visualization Engine (RamachandranPlot).
-Calculates backbone Phi (phi) and Psi (psi) dihedral angles from PDB/CIF structure files
-or pre-calculated torsion angle datasets, and generates publication-quality scatter,
-density contour, and multi-panel (General, Glycine, Proline, Pre-Proline) Ramachandran plots.
+Ramachandran validation and plots of the bound and unbound proteins of the 187 PRDBv3 complexes,
+against the MolProbity Top8000 reference contours (Richardson lab reference_data, CC-BY-4.0;
+Williams et al. 2018 Protein Sci 27:293; Hintze et al. 2016 Proteins 84:1177).
+
+Categories (as in MolProbity ramalyze), in order of precedence:
+  Glycine    GLY                                   rama8000-gly-sym
+  trans-Pro  PRO, preceding peptide bond trans     rama8000-transpro
+  cis-Pro    PRO, preceding omega within 30 of 0   rama8000-cispro
+  pre-Pro    residue before PRO (not GLY / PRO)    rama8000-prepro-noGP
+  Ile/Val    ILE, VAL                              rama8000-ileval-nopreP
+  General    all others                            rama8000-general-noGPIVpreP
+The preceding omega is the OMEGA of the previous residue in the dataset (CA(i-1)-C(i-1)-N(i)-CA(i));
+a residue is pre-Pro when the next residue in the same chain, peptide-bonded to it (psi defined),
+is PRO.
+
+Region: the grid value at (phi, psi) (linear interpolation between bin centres, periodic) is
+Favored when >= 0.02 (2%), Allowed when >= 0.0005 (General), 0.002 (cis-Pro) or 0.001 (others),
+else Outlier (MolProbity thresholds).
+
+Outputs:
+  output_files/ramachandran/ramachandran_residues.csv   per residue: category, score, region (B and U)
+  output_files/ramachandran/ramachandran_summary.csv    per state, category and residue type:
+                                                        counts and % favored / allowed / outlier,
+                                                        circular mean and SD of phi and psi
+  figure(s)/ramachandran/ramachandran_categories_{B,U}.png   six categories over Top8000 contours
+  figure(s)/ramachandran/per_residue/<AA>_{B,U}_ramachandran.png
+                                                        one residue type (pre-Pro and cis-Pro
+                                                        residues excluded) over its contour
 
 Usage:
-    python script/ramachandran_plot.py [options]
+    python script/ramachandran_plot.py [--states B U] [--no-per-residue]
 """
 
-import sys
 import argparse
 import logging
+import sys
 from pathlib import Path
 
-import matplotlib.path as mpath
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.stats import circmean, circstd, gaussian_kde
+from scipy.stats import circmean, circstd
 
-# Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
+sys.path.insert(0, str(ROOT_DIR))
+from utils.top8000 import TOP8000_DIR, Top8000Grid  # noqa: E402
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
+
 RESULTS_DIR = ROOT_DIR / "output_files" / "ramachandran"
-FIGURES_DIR = ROOT_DIR / "figure" / "ramachandran"
-ALT_FIGURES_DIR = ROOT_DIR / "figures" / "ramachandran"
-
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-ALT_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from utils.mmcif_clean_reader import parse_file
-from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset
-
-try:
-    import seaborn as sns
-    HAS_SEABORN = True
-except ImportError:
-    HAS_SEABORN = False
-
-
-class RamachandranPlot:
-    """
-    Ramachandran plot calculator and visualizer.
-    Supports PDB/CIF structure files (via mmcif_clean_reader.py) and pre-calculated torsion angle datasets.
-    """
-
-    RAMA_TYPES = ["General", "Glycine", "Proline", "Pre-Pro"]
-
-    def __init__(self, data=None, input_path=None, precalculated_file=None):
-        """
-        Initialize RamachandranPlot.
-
-        Parameters:
-        -----------
-        data : pd.DataFrame, optional
-            Pre-loaded DataFrame containing Phi and Psi angles.
-        input_path : Path or str, optional
-            Path to PDB/CIF file, list file, or directory of structure files.
-        precalculated_file : Path or str, optional
-            Path to CSV/TSV dataset containing pre-calculated backbone torsion angles.
-        """
-        self.data_df = None
-
-        if data is not None and isinstance(data, pd.DataFrame):
-            self.data_df = data.copy()
-        elif precalculated_file:
-            self.load_precalculated_data(precalculated_file)
-        elif input_path:
-            self.process_structure_input(input_path)
-
-    @staticmethod
-    def calculate_dihedral(p1, p2, p3, p4):
-        """Calculate dihedral angle in degrees for 4 3D points p1, p2, p3, p4."""
-        b1 = p2 - p1
-        b2 = p3 - p2
-        b3 = p4 - p3
-        n1 = np.cross(b1, b2)
-        n2 = np.cross(b2, b3)
-        n1_norm = np.linalg.norm(n1)
-        n2_norm = np.linalg.norm(n2)
-        if n1_norm == 0 or n2_norm == 0:
-            return np.nan
-        n1 /= n1_norm
-        n2 /= n2_norm
-        norm_b2 = np.linalg.norm(b2)
-        if norm_b2 == 0:
-            return np.nan
-        b2_u = b2 / norm_b2
-        m1 = np.cross(n1, b2_u)
-        x = np.dot(n1, n2)
-        y = np.dot(m1, n2)
-        return float(np.degrees(np.arctan2(y, x)))
-
-    @staticmethod
-    def classify_rama_type(res_name, next_res_name=None):
-        """
-        Classify residue into Ramachandran case: General, Glycine, Proline, Pre-Pro.
-        """
-        res = str(res_name).strip().upper()
-        next_res = str(next_res_name).strip().upper() if next_res_name else ""
-
-        if res == "GLY":
-            return "Glycine"
-        elif res == "PRO":
-            return "Proline"
-        elif next_res == "PRO":
-            return "Pre-Pro"
-        else:
-            return "General"
-
-    @staticmethod
-    def classify_region(phi, psi, rama_type="General"):
-        """
-        Classify (phi, psi) pair into Favored, Allowed, or Outlier regions.
-        """
-        if pd.isna(phi) or pd.isna(psi):
-            return "Outlier"
-
-        phi = float(phi)
-        psi = float(psi)
-
-        # Glycine specific contours (checked first)
-        if rama_type == "Glycine":
-            if (30 <= phi <= 100 and -80 <= psi <= 10) or (-100 <= phi <= -30 and 10 <= psi <= 80):
-                return "Favored"
-            if (-180 <= phi <= 180 and -180 <= psi <= 180):
-                return "Allowed"
-            return "Outlier"
-
-        # Proline restricted phi around -65
-        if rama_type == "Proline":
-            if -100 <= phi <= -40 and (-80 <= psi <= 40 or 90 <= psi <= 180):
-                return "Favored"
-            if -120 <= phi <= -20 and -100 <= psi <= 180:
-                return "Allowed"
-            return "Outlier"
-
-        # General / Pre-Pro Favored
-        if (-100 <= phi <= -30 and -80 <= psi <= -10) or \
-           (-180 <= phi <= -45 and (90 <= psi <= 180 or -180 <= psi <= -150)) or \
-           (30 <= phi <= 100 and 10 <= psi <= 80):
-            return "Favored"
-
-        # General Allowed (expanded margins)
-        if (-120 <= phi <= -20 and -100 <= psi <= 20) or \
-           (-180 <= phi <= -30 and (60 <= psi <= 180 or -180 <= psi <= -120)) or \
-           (20 <= phi <= 120 and -10 <= psi <= 100):
-            return "Allowed"
-
-        return "Outlier"
-
-    def extract_angles_from_structure_file(self, file_path):
-        """
-        Extract Phi and Psi backbone angles from a single PDB or mmCIF structure file
-        using utils/mmcif_clean_reader.py.
-        """
-        file_path = Path(file_path)
-        residue_angle_records = []
-
-        try:
-            cols, rows = parse_file(str(file_path))
-        except Exception as e:
-            logging.error(f"Failed to parse structure file {file_path} using mmcif_clean_reader: {e}")
-            return residue_angle_records
-
-        # Group atoms by residue key (chain, resnum, icode, resname)
-        residues = {}
-        for r in rows:
-            chain_id = r.get("_atom_site.auth_asym_id") or r.get("_atom_site.label_asym_id")
-            res_num = r.get("_atom_site.auth_seq_id") or r.get("_atom_site.label_seq_id")
-            icode = r.get("_atom_site.pdbx_PDB_ins_code", ".").strip()
-            if icode == ".":
-                icode = ""
-            res_name = r.get("_atom_site.auth_comp_id") or r.get("_atom_site.label_comp_id")
-            atom_name = r.get("_atom_site.auth_atom_id") or r.get("_atom_site.label_atom_id")
-
-            try:
-                x = float(r["_atom_site.Cartn_x"])
-                y = float(r["_atom_site.Cartn_y"])
-                z = float(r["_atom_site.Cartn_z"])
-                coord = np.array([x, y, z], dtype=float)
-            except (KeyError, ValueError):
-                continue
-
-            res_key = (chain_id, str(res_num), str(icode), str(res_name))
-            if res_key not in residues:
-                residues[res_key] = {}
-            residues[res_key][str(atom_name)] = coord
-
-        def _sort_key(k):
-            try:
-                num = int(k[1])
-            except ValueError:
-                num = 0
-            return (str(k[0]), num, str(k[2]))
-
-        res_keys = sorted(residues.keys(), key=_sort_key)
-        for idx in range(1, len(res_keys) - 1):
-            prev_key = res_keys[idx - 1]
-            curr_key = res_keys[idx]
-            next_key = res_keys[idx + 1]
-
-            # Ensure residues are on the same chain
-            if prev_key[0] == curr_key[0] == next_key[0]:
-                c_prev = residues[prev_key].get("C")
-                n_curr = residues[curr_key].get("N")
-                ca_curr = residues[curr_key].get("CA")
-                c_curr = residues[curr_key].get("C")
-                n_next = residues[next_key].get("N")
-
-                if c_prev is not None and n_curr is not None and ca_curr is not None and c_curr is not None and n_next is not None:
-                    phi_deg = self.calculate_dihedral(c_prev, n_curr, ca_curr, c_curr)
-                    psi_deg = self.calculate_dihedral(n_curr, ca_curr, c_curr, n_next)
-
-                    if np.isnan(phi_deg) or np.isnan(psi_deg):
-                        continue
-
-                    chain_id = curr_key[0]
-                    res_num = curr_key[1]
-                    res_name = curr_key[3]
-                    next_res_name = next_key[3]
-
-                    rama_type = self.classify_rama_type(res_name, next_res_name)
-                    region = self.classify_region(phi_deg, psi_deg, rama_type)
-
-                    record = {
-                        "PDB": file_path.stem,
-                        "CHAIN": chain_id,
-                        "RESNUM": res_num,
-                        "RESNAME": res_name,
-                        "LABEL": f"{res_name} {chain_id} {res_num}",
-                        "PHI": float(phi_deg),
-                        "PSI": float(psi_deg),
-                        "RAMA_TYPE": rama_type,
-                        "REGION": region,
-                    }
-                    residue_angle_records.append(record)
-
-        return residue_angle_records
-
-    def process_structure_input(self, input_path):
-        """
-        Process PDB/CIF input path (single file, list file, or directory).
-        """
-        input_path = Path(input_path)
-        all_records = []
-
-        if input_path.is_file():
-            # Check if it's a structure file or a list file
-            if input_path.suffix.lower() in [".pdb", ".ent", ".cif", ".mmcif"]:
-                logging.info(f"Parsing single structure file: {input_path}")
-                all_records.extend(self.extract_angles_from_structure_file(input_path))
-            else:
-                # Text file list of paths
-                logging.info(f"Parsing list file of structures: {input_path}")
-                with open(input_path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        p = Path(line.split()[0])
-                        if p.exists():
-                            all_records.extend(self.extract_angles_from_structure_file(p))
-        elif input_path.is_dir():
-            logging.info(f"Scanning directory for PDB/CIF files: {input_path}")
-            struct_files = list(input_path.glob("**/*.pdb")) + list(input_path.glob("**/*.ent")) + list(input_path.glob("**/*.cif"))
-            for p in struct_files:
-                all_records.extend(self.extract_angles_from_structure_file(p))
-
-        if all_records:
-            self.data_df = pd.DataFrame(all_records)
-            logging.info(f"Successfully extracted {len(self.data_df)} residue Phi/Psi angle pairs.")
-        else:
-            logging.warning("No structure angle records extracted.")
-
-    def load_precalculated_data(self, file_path_or_df):
-        """
-        Load pre-calculated backbone torsion angle data from CSV/TSV or DataFrame.
-        """
-        if isinstance(file_path_or_df, pd.DataFrame):
-            df = file_path_or_df.copy()
-        else:
-            p = Path(file_path_or_df)
-            if not p.exists():
-                logging.error(f"Precalculated file not found: {p}")
-                return
-            df = load_torsion_dataset(p)
-
-        # Map standard column names if using B_PHI/B_PSI or U_PHI/U_PSI
-        if "B_PHI" in df.columns and "PHI" not in df.columns:
-            df["PHI"] = df["B_PHI"]
-            df["PSI"] = df["B_PSI"]
-        elif "phi" in df.columns and "PHI" not in df.columns:
-            df["PHI"] = df["phi"]
-            df["PSI"] = df["psi"]
-
-        if "RESNAME" not in df.columns and "LABEL" in df.columns:
-            df["RESNAME"] = df["LABEL"].astype(str).str[:3]
-
-        if "RAMA_TYPE" not in df.columns:
-            df["RAMA_TYPE"] = [self.classify_rama_type(r, n) for r, n in zip(df["RESNAME"], self._next_resnames(df))]
-
-        if "REGION" not in df.columns:
-            df["REGION"] = df.apply(lambda row: self.classify_region(row["PHI"], row["PSI"], row.get("RAMA_TYPE", "General")), axis=1)
-
-        self.data_df = df
-        logging.info(f"Loaded precalculated data with {len(self.data_df)} records.")
-
-    @staticmethod
-    def _next_resnames(df):
-        """
-        Name of the residue peptide-bonded after each row (rows in chain order, as in the torsion
-        dataset), or None. Psi is defined only when residue i is bonded to i + 1 in the same chain,
-        so a missing psi marks a chain end or break.
-        """
-        if not {"PDB", "LABEL"}.issubset(df.columns):
-            return [None] * len(df)
-        chain = df["LABEL"].astype(str).str.split().str[1]
-        same_chain = (df["PDB"].shift(-1) == df["PDB"]) & (chain.shift(-1) == chain)
-        nxt = df["RESNAME"].shift(-1).where(same_chain & df["PSI"].notna())
-        return [n if isinstance(n, str) else None for n in nxt]
-
-    def draw_ramachandran_regions(self, ax):
-        """
-        Draw reference region outlines and grid lines on Ramachandran axes.
-        """
-        ax.set_xlim(-180, 180)
-        ax.set_ylim(-180, 180)
-        ax.set_xticks([-180, -90, 0, 90, 180])
-        ax.set_yticks([-180, -90, 0, 90, 180])
-        ax.axhline(0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
-        ax.axvline(0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
-        ax.grid(True, linestyle=":", alpha=0.5)
-
-        # Alpha-helix core box outline
-        rect_alpha = mpatches.Rectangle((-100, -80), 70, 70, fill=False, edgecolor="#004225", linestyle="-", linewidth=1.5, alpha=0.8, label=r"$\alpha$-helix")
-        # Beta-sheet core box outline
-        rect_beta = mpatches.Rectangle((-180, 90), 135, 90, fill=False, edgecolor="#B22222", linestyle="-", linewidth=1.5, alpha=0.8, label=r"$\beta$-sheet")
-        # Left-handed alpha core box outline
-        rect_lalpha = mpatches.Rectangle((30, 10), 70, 70, fill=False, edgecolor="#663399", linestyle="-", linewidth=1.5, alpha=0.8, label=r"L-$\alpha$")
-
-        ax.add_patch(rect_alpha)
-        ax.add_patch(rect_beta)
-        ax.add_patch(rect_lalpha)
-
-    # =========================================================================
-    # 1. SCATTER PLOT
-    # =========================================================================
-    def plot_scatter(
-        self,
-        phi_col="PHI",
-        psi_col="PSI",
-        hue_col=None,
-        title="Ramachandran Scatter Plot",
-        save_path=None,
-        alpha=0.6,
-        s=15,
-    ):
-        """
-        Generate Ramachandran scatter plot of Phi vs Psi angles.
-
-        Parameters:
-        -----------
-        phi_col : str
-        psi_col : str
-        hue_col : str, optional
-            Column name to color points by (e.g. 'RAMA_TYPE', 'REGION', 'SASA').
-        title : str
-        save_path : Path or str, optional
-        alpha : float
-        s : int
-        """
-        if self.data_df is None or self.data_df.empty:
-            logging.error("No angle data available for Ramachandran scatter plot.")
-            return
-
-        df = self.data_df.dropna(subset=[phi_col, psi_col]).copy()
-        if df.empty:
-            logging.error(f"Columns {phi_col} and {psi_col} contain no valid numerical data.")
-            return
-
-        fig, ax = plt.subplots(figsize=(7, 7))
-        self.draw_ramachandran_regions(ax)
-
-        if hue_col and hue_col in df.columns:
-            if HAS_SEABORN:
-                sns.scatterplot(data=df, x=phi_col, y=psi_col, hue=hue_col, ax=ax, alpha=alpha, s=s, edgecolor="none", zorder=3)
-            else:
-                for val, grp in df.groupby(hue_col):
-                    ax.scatter(grp[phi_col], grp[psi_col], alpha=alpha, s=s, label=str(val), zorder=3)
-                ax.legend(title=hue_col, loc="upper right")
-        else:
-            ax.scatter(df[phi_col], df[psi_col], color="#1f77b4", alpha=alpha, s=s, zorder=3, label="Residues")
-
-        ax.set_xlabel(r"$\Phi$ (degrees)", fontsize=13, fontweight="bold")
-        ax.set_ylabel(r"$\Psi$ (degrees)", fontsize=13, fontweight="bold")
-        ax.set_title(title, fontsize=14, fontweight="bold", pad=15)
-
-        # Calculate region statistics
-        total = len(df)
-        favored = len(df[df["REGION"] == "Favored"])
-        allowed = len(df[df["REGION"] == "Allowed"])
-        outliers = len(df[df["REGION"] == "Outlier"])
-
-        stats_text = (
-            f"Total: {total}\n"
-            f"Favored: {favored} ({favored/total*100:.1f}%)\n"
-            f"Allowed: {allowed} ({allowed/total*100:.1f}%)\n"
-            f"Outliers: {outliers} ({outliers/total*100:.1f}%)"
-        )
-        ax.text(
-            0.03,
-            0.03,
-            stats_text,
-            transform=ax.transAxes,
-            fontsize=10,
-            verticalalignment="bottom",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.9),
-            zorder=5,
-        )
-
-        plt.tight_layout()
-
-        if save_path:
-            out_p = Path(save_path)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(out_p, dpi=300, bbox_inches="tight")
-            logging.info(f"Saved Ramachandran scatter plot: {out_p}")
-
-        plt.close(fig)
-
-    # =========================================================================
-    # 2. 2D DENSITY CONTOUR PLOT
-    # =========================================================================
-    def plot_contour(
-        self,
-        phi_col="PHI",
-        psi_col="PSI",
-        title="Ramachandran Density Contour Plot",
-        save_path=None,
-        cmap="YlOrRd",
-        levels=10,
-        scatter_overlay=True,
-    ):
-        """
-        Generate 2D population density contour Ramachandran plot using Gaussian KDE.
-        """
-        if self.data_df is None or self.data_df.empty:
-            logging.error("No angle data available for Ramachandran contour plot.")
-            return
-
-        df = self.data_df.dropna(subset=[phi_col, psi_col]).copy()
-        if len(df) < 5:
-            logging.error("Insufficient data points for 2D density contour calculation.")
-            return
-
-        phi_vals = df[phi_col].values
-        psi_vals = df[psi_col].values
-
-        # Grid calculation
-        xi, yi = np.mgrid[-180:180:180j, -180:180:180j]
-        coords = np.vstack([phi_vals, psi_vals])
-        kde = gaussian_kde(coords)
-        zi = kde(np.vstack([xi.flatten(), yi.flatten()])).reshape(xi.shape)
-
-        fig, ax = plt.subplots(figsize=(7, 7))
-        self.draw_ramachandran_regions(ax)
-
-        # Plot filled contours
-        cf = ax.contourf(xi, yi, zi, levels=levels, cmap=cmap, alpha=0.85, zorder=2)
-        fig.colorbar(cf, ax=ax, label="Population Density")
-
-        if scatter_overlay:
-            ax.scatter(phi_vals, psi_vals, color="black", alpha=0.25, s=8, zorder=3)
-
-        ax.set_xlabel(r"$\Phi$ (degrees)", fontsize=13, fontweight="bold")
-        ax.set_ylabel(r"$\Psi$ (degrees)", fontsize=13, fontweight="bold")
-        ax.set_title(title, fontsize=14, fontweight="bold", pad=15)
-
-        plt.tight_layout()
-
-        if save_path:
-            out_p = Path(save_path)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(out_p, dpi=300, bbox_inches="tight")
-            logging.info(f"Saved Ramachandran density contour plot: {out_p}")
-
-        plt.close(fig)
-
-    # =========================================================================
-    # 3. FACETED 2X2 RAMACHANDRAN PLOT
-    # =========================================================================
-    def plot_faceted(
-        self,
-        phi_col="PHI",
-        psi_col="PSI",
-        title="Ramachandran Plot by Residue Type",
-        save_path=None,
-    ):
-        """
-        Generate 2x2 multi-panel Ramachandran plots: General, Glycine, Proline, Pre-Pro.
-        """
-        if self.data_df is None or self.data_df.empty:
-            logging.error("No data available for faceted Ramachandran plot.")
-            return
-
-        df = self.data_df.dropna(subset=[phi_col, psi_col]).copy()
-
-        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(10, 10))
-        axes = axes.flatten()
-
-        for i, rama_type in enumerate(self.RAMA_TYPES):
-            ax = axes[i]
-            self.draw_ramachandran_regions(ax)
-
-            sub_df = df[df["RAMA_TYPE"] == rama_type]
-
-            if not sub_df.empty:
-                ax.scatter(sub_df[phi_col], sub_df[psi_col], color="#1f77b4", alpha=0.5, s=12, zorder=3)
-
-                tot = len(sub_df)
-                fav = len(sub_df[sub_df["REGION"] == "Favored"])
-                out = len(sub_df[sub_df["REGION"] == "Outlier"])
-                ax.text(
-                    0.04,
-                    0.04,
-                    f"N: {tot}\nFav: {fav/tot*100:.1f}%\nOut: {out/tot*100:.1f}%",
-                    transform=ax.transAxes,
-                    fontsize=9,
-                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
-                    zorder=4,
-                )
-
-            ax.set_title(rama_type, fontsize=12, fontweight="bold")
-            ax.set_xlabel(r"$\Phi$ (deg)" if i >= 2 else "", fontsize=11)
-            ax.set_ylabel(r"$\Psi$ (deg)" if i % 2 == 0 else "", fontsize=11)
-
-        fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
-        plt.tight_layout()
-
-        if save_path:
-            out_p = Path(save_path)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(out_p, dpi=300, bbox_inches="tight")
-            logging.info(f"Saved faceted Ramachandran plot: {out_p}")
-
-        plt.close(fig)
-
-    # =========================================================================
-    # 4. SUMMARY CSV EXPORT
-    # =========================================================================
-    def export_summary(self, output_csv_path=None):
-        """
-        Export statistical summary table of Ramachandran distribution by residue and region.
-        """
-        if self.data_df is None or self.data_df.empty:
-            logging.error("No data available for summary export.")
-            return None
-
-        df = self.data_df.dropna(subset=["PHI", "PSI"]).copy()
-
-        summary_rows = []
-        for (resn, rtype), grp in df.groupby(["RESNAME", "RAMA_TYPE"]):
-            tot = len(grp)
-            fav = len(grp[grp["REGION"] == "Favored"])
-            allow = len(grp[grp["REGION"] == "Allowed"])
-            out = len(grp[grp["REGION"] == "Outlier"])
-
-            row = {
-                "RESNAME": resn,
-                "RAMA_TYPE": rtype,
-                "TOTAL_COUNT": tot,
-                "FAVORED_COUNT": fav,
-                "ALLOWED_COUNT": allow,
-                "OUTLIER_COUNT": out,
-                "FAVORED_PCT": round(fav / tot * 100.0, 2) if tot > 0 else 0.0,
-                "ALLOWED_PCT": round(allow / tot * 100.0, 2) if tot > 0 else 0.0,
-                "OUTLIER_PCT": round(out / tot * 100.0, 2) if tot > 0 else 0.0,
-                # Circular statistics: psi of beta residues straddles +-180
-                "MEAN_PHI": round(float(circmean(grp["PHI"], high=180, low=-180)), 2),
-                "STD_PHI": round(float(circstd(grp["PHI"], high=180, low=-180)), 2),
-                "MEAN_PSI": round(float(circmean(grp["PSI"], high=180, low=-180)), 2),
-                "STD_PSI": round(float(circstd(grp["PSI"], high=180, low=-180)), 2),
-            }
-            summary_rows.append(row)
-
-        summary_df = pd.DataFrame(summary_rows)
-
-        if output_csv_path:
-            out_p = Path(output_csv_path)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            summary_df.to_csv(out_p, index=False)
-            logging.info(f"Saved Ramachandran summary CSV: {out_p}")
-
-        return summary_df
+FIGURES_DIRS = [ROOT_DIR / "figure" / "ramachandran", ROOT_DIR / "figures" / "ramachandran"]
+RAMA_GRID_DIR = TOP8000_DIR / "Top8000_ramachandran_pct_contour_grids"
+
+# Category -> (Top8000 grid file, allowed threshold)
+CATEGORIES = {
+    "General": ("rama8000-general-noGPIVpreP.data", 0.0005),
+    "Glycine": ("rama8000-gly-sym.data", 0.001),
+    "trans-Pro": ("rama8000-transpro.data", 0.001),
+    "cis-Pro": ("rama8000-cispro.data", 0.002),
+    "pre-Pro": ("rama8000-prepro-noGP.data", 0.001),
+    "Ile/Val": ("rama8000-ileval-nopreP.data", 0.001),
+}
+FAVORED = 0.02
+CIS_OMEGA = 30.0
+REGIONS = ["Favored", "Allowed", "Outlier"]
+
+# Manuscript scatter style (final_clustering/phi_psi_scatter_plot.ipynb)
+POINT_COLOR = "#3F51B5"
+OUTLIER_COLOR = "#eb6834"
+FAVORED_FILL, ALLOWED_FILL, CONTOUR_LINE = "#d6d5cf", "#efeeea", "#9a9993"
+
+plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans", "Arial", "Helvetica"]})
+
+
+# ----------------------------------------------------------------------------------------------
+# Classification
+# ----------------------------------------------------------------------------------------------
+def load_grids():
+    return {cat: Top8000Grid(RAMA_GRID_DIR / fname) for cat, (fname, _) in CATEGORIES.items()}
+
+
+def neighbour_columns(df):
+    """Previous residue's OMEGA and next residue's name, within the same complex and chain."""
+    chain = df["LABEL"].str.split().str[1]
+    resname = df["LABEL"].str[:3]
+    same_prev = (df["PDB"].shift(1) == df["PDB"]) & (chain.shift(1) == chain)
+    same_next = (df["PDB"].shift(-1) == df["PDB"]) & (chain.shift(-1) == chain)
+    prev_omega = {s: df[f"{s}_OMEGA"].shift(1).where(same_prev) for s in "BU"}
+    # psi of residue i is defined only when i is peptide-bonded to i + 1
+    next_res = {s: resname.shift(-1).where(same_next & df[f"{s}_PSI"].notna()) for s in "BU"}
+    return resname, prev_omega, next_res
+
+
+def rama_category(resname, prev_omega, next_res):
+    """MolProbity Ramachandran category of each residue (arrays of equal length)."""
+    cat = np.full(len(resname), "General", dtype=object)
+    cat[np.isin(resname, ["ILE", "VAL"])] = "Ile/Val"
+    cat[(next_res == "PRO") & ~np.isin(resname, ["GLY", "PRO"])] = "pre-Pro"
+    is_pro = resname == "PRO"
+    cis = np.abs(np.nan_to_num(prev_omega.astype(float), nan=180.0)) < CIS_OMEGA
+    cat[is_pro & cis] = "cis-Pro"
+    cat[is_pro & ~cis] = "trans-Pro"
+    cat[resname == "GLY"] = "Glycine"
+    return cat
+
+
+def classify(df, grids):
+    """Per-residue category, Top8000 score and region for the bound and unbound states."""
+    resname, prev_omega, next_res = neighbour_columns(df)
+    out = pd.DataFrame({"PDB": df["PDB"], "LABEL": df["LABEL"], "RESNAME": resname, "SASA": df["SASA"]})
+    for s in "BU":
+        phi, psi = df[f"{s}_PHI"].to_numpy(float), df[f"{s}_PSI"].to_numpy(float)
+        cat = rama_category(resname.to_numpy(), prev_omega[s].to_numpy(), next_res[s].to_numpy())
+        score = np.full(len(df), np.nan)
+        region = np.full(len(df), None, dtype=object)
+        for name, (_, allowed) in CATEGORIES.items():
+            m = cat == name
+            score[m] = grids[name](phi[m], psi[m])
+            region[m] = np.where(score[m] >= FAVORED, "Favored",
+                                 np.where(score[m] >= allowed, "Allowed", "Outlier"))
+        undefined = np.isnan(phi) | np.isnan(psi)
+        region[undefined] = None
+        out[f"{s}_PHI"], out[f"{s}_PSI"] = phi, psi
+        out[f"{s}_RAMA_TYPE"] = np.where(undefined, None, cat)
+        out[f"{s}_RAMA_SCORE"], out[f"{s}_RAMA_REGION"] = score, region
+    return out
+
+
+def summary_table(res):
+    rows = []
+    for s in "BU":
+        d = res.dropna(subset=[f"{s}_RAMA_REGION"])
+        groups = [("All", "All", d)] + [(cat, "All", g) for cat, g in d.groupby(f"{s}_RAMA_TYPE")] + \
+                 [(cat, aa, g) for (cat, aa), g in d.groupby([f"{s}_RAMA_TYPE", "RESNAME"])]
+        for cat, aa, g in groups:
+            counts = g[f"{s}_RAMA_REGION"].value_counts()
+            n = len(g)
+            rec = {"STATE": s, "RAMA_TYPE": cat, "RESNAME": aa, "TOTAL_COUNT": n}
+            for r in REGIONS:
+                rec[f"{r.upper()}_COUNT"] = int(counts.get(r, 0))
+                rec[f"{r.upper()}_PCT"] = round(counts.get(r, 0) / n * 100, 2)
+            for a in ("PHI", "PSI"):
+                rec[f"MEAN_{a}"] = round(float(circmean(g[f"{s}_{a}"], high=180, low=-180)), 2)
+                rec[f"SD_{a}"] = round(float(circstd(g[f"{s}_{a}"], high=180, low=-180)), 2)
+            rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+# ----------------------------------------------------------------------------------------------
+# Figures
+# ----------------------------------------------------------------------------------------------
+def draw_contours(ax, grid, allowed):
+    # Pad one wrapped bin on every side so the contours reach the +-180 edges
+    x = np.concatenate([[grid.centres(0)[0] - grid.width[0]], grid.centres(0), [grid.centres(0)[-1] + grid.width[0]]])
+    y = np.concatenate([[grid.centres(1)[0] - grid.width[1]], grid.centres(1), [grid.centres(1)[-1] + grid.width[1]]])
+    z = np.pad(grid.values, 1, mode="wrap").T          # rows = psi, columns = phi
+    ax.contourf(x, y, z, levels=[allowed, FAVORED, np.inf], colors=[ALLOWED_FILL, FAVORED_FILL], zorder=0)
+    ax.contour(x, y, z, levels=[allowed, FAVORED], colors=CONTOUR_LINE, linewidths=0.6, zorder=1)
+
+
+def style_axes(ax, title, subtitle=None):
+    ax.set_xlim(-180, 180)
+    ax.set_ylim(-180, 180)
+    ticks = np.arange(-180, 181, 60)
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+    ax.tick_params(labelsize=10)
+    ax.axhline(0, linestyle="--", linewidth=0.8, color="#0072B2", zorder=1)
+    ax.axvline(0, linestyle="--", linewidth=0.8, color="#0072B2", zorder=1)
+    ax.set_aspect("equal", adjustable="box")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_title(title, fontsize=13, pad=16 if subtitle else 6)
+    if subtitle:
+        ax.text(0.5, 1.01, subtitle, transform=ax.transAxes, ha="center", va="bottom", fontsize=8,
+                color="#4a4a46")
+
+
+def scatter_panel(ax, d, s, grid, allowed, title):
+    draw_contours(ax, grid, allowed)
+    out = d[f"{s}_RAMA_REGION"] == "Outlier"
+    ax.scatter(d.loc[~out, f"{s}_PHI"], d.loc[~out, f"{s}_PSI"], s=8, alpha=0.6, color=POINT_COLOR,
+               marker="P", linewidths=0, rasterized=True, zorder=2)
+    ax.scatter(d.loc[out, f"{s}_PHI"], d.loc[out, f"{s}_PSI"], s=14, color=OUTLIER_COLOR,
+               marker="X", linewidths=0, zorder=3)
+    counts = d[f"{s}_RAMA_REGION"].value_counts()
+    n = len(d)
+    style_axes(ax, title, f"n = {n:,}  ·  favored {counts.get('Favored', 0) / n:.1%}  ·  "
+                          f"outliers {counts.get('Outlier', 0)} ({counts.get('Outlier', 0) / n:.2%})")
+
+
+def legend_handles():
+    from matplotlib.patches import Patch
+    return [Patch(facecolor=FAVORED_FILL, edgecolor=CONTOUR_LINE, label="Top8000 favored (98%)"),
+            Patch(facecolor=ALLOWED_FILL, edgecolor=CONTOUR_LINE, label="Top8000 allowed"),
+            plt.Line2D([], [], marker="P", linestyle="", color=POINT_COLOR, label="Favored / allowed"),
+            plt.Line2D([], [], marker="X", linestyle="", color=OUTLIER_COLOR, label="Outlier")]
+
+
+def save(fig, name):
+    for out_dir in FIGURES_DIRS:
+        (out_dir / Path(name).parent).mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_dir / name, dpi=600, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_categories(res, grids, s):
+    state = {"B": "bound", "U": "unbound"}[s]
+    fig, axes = plt.subplots(2, 3, figsize=(12, 9.2))
+    d_all = res.dropna(subset=[f"{s}_RAMA_REGION"])
+    for ax, (cat, (_, allowed)) in zip(axes.flat, CATEGORIES.items()):
+        scatter_panel(ax, d_all[d_all[f"{s}_RAMA_TYPE"] == cat], s, grids[cat], allowed, cat)
+    for ax in axes[-1]:
+        ax.set_xlabel(r"$\phi$ (°)", fontsize=12)
+    for ax in axes[:, 0]:
+        ax.set_ylabel(r"$\psi$ (°)", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.92), h_pad=2.5)
+    fig.legend(handles=legend_handles(), loc="lower center", bbox_to_anchor=(0.5, 0.92), ncol=4,
+               frameon=False, fontsize=10)
+    fig.suptitle(f"Ramachandran plot, {state} proteins (187 complexes)", fontsize=14, y=0.995)
+    save(fig, f"ramachandran_categories_{s}.png")
+
+
+def plot_per_residue(res, grids, s):
+    """One panel per residue type over its own category contour; pre-Pro and cis-Pro excluded."""
+    d_all = res.dropna(subset=[f"{s}_RAMA_REGION"])
+    for aa, d in d_all.groupby("RESNAME"):
+        cat = {"GLY": "Glycine", "PRO": "trans-Pro", "ILE": "Ile/Val", "VAL": "Ile/Val"}.get(aa, "General")
+        d = d[d[f"{s}_RAMA_TYPE"] == cat]
+        fig, ax = plt.subplots(figsize=(4, 4))
+        scatter_panel(ax, d, s, grids[cat], CATEGORIES[cat][1], aa)
+        ax.set_xlabel(r"$\phi$ (°)", fontsize=14)
+        ax.set_ylabel(r"$\psi$ (°)", fontsize=14)
+        save(fig, f"per_residue/{aa}_{s}_ramachandran.png")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Ramachandran Plot Generator and Torsion Angle Calculator.")
-    parser.add_argument("--input-path", type=Path, default=None, help="Path to single PDB/CIF file, list file, or directory of structures.")
-    parser.add_argument("--precalculated-tsv", type=Path, default=TORSION_DATASET, help="Precalculated torsion angle dataset (JSON / CSV / TSV); default the 187-complex bound/unbound JSON.")
-    parser.add_argument("--plot-type", type=str, default="all", choices=["scatter", "contour", "faceted", "all"], help="Plot type to generate.")
-    parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output directory for figure plots.")
-    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV summary tables.")
-
+    parser = argparse.ArgumentParser(description="Ramachandran validation against MolProbity Top8000 contours.")
+    parser.add_argument("--dataset-file", type=Path, default=TORSION_DATASET, help="Torsion angle dataset.")
+    parser.add_argument("--states", nargs="+", default=["B", "U"], choices=["B", "U"], help="States to plot.")
+    parser.add_argument("--no-per-residue", action="store_true", help="Skip the per-residue-type figures.")
+    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for tables.")
     args = parser.parse_args()
 
-    # Load dataset or structure input
-    if args.input_path and args.input_path.exists():
-        plotter = RamachandranPlot(input_path=args.input_path)
-    else:
-        plotter = RamachandranPlot(precalculated_file=args.precalculated_tsv)
+    grids = load_grids()
+    res = classify(load_torsion_dataset(args.dataset_file), grids)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    res.to_csv(args.output_dir / "ramachandran_residues.csv", index=False, float_format="%.5g")
+    summary = summary_table(res)
+    summary.to_csv(args.output_dir / "ramachandran_summary.csv", index=False)
+    for s in "BU":
+        r = summary[(summary.STATE == s) & (summary.RAMA_TYPE == "All")].iloc[0]
+        logging.info(f"{s}: {r.TOTAL_COUNT} residues, favored {r.FAVORED_PCT}%, allowed {r.ALLOWED_PCT}%, "
+                     f"outliers {r.OUTLIER_COUNT} ({r.OUTLIER_PCT}%)")
 
-    out_fig_dir = args.figures_dir
-    out_fig_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.plot_type in ["scatter", "all"]:
-        plotter.plot_scatter(save_path=out_fig_dir / "ramachandran_scatter.png")
-        plotter.plot_scatter(hue_col="RAMA_TYPE", title="Ramachandran Plot by Residue Type", save_path=out_fig_dir / "ramachandran_scatter_by_type.png")
-
-    if args.plot_type in ["contour", "all"]:
-        plotter.plot_contour(save_path=out_fig_dir / "ramachandran_contour.png")
-
-    if args.plot_type in ["faceted", "all"]:
-        plotter.plot_faceted(save_path=out_fig_dir / "ramachandran_faceted.png")
-
-    # Export summary CSV
-    plotter.export_summary(output_csv_path=args.output_dir / "ramachandran_summary.csv")
-
-    logging.info("RamachandranPlot execution finished successfully.")
+    for s in args.states:
+        plot_categories(res, grids, s)
+        if not args.no_per_residue:
+            plot_per_residue(res, grids, s)
+    logging.info(f"Tables in {args.output_dir}; figures in {FIGURES_DIRS[-1]}")
 
 
 if __name__ == "__main__":
