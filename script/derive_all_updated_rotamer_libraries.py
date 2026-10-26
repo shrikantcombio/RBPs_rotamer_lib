@@ -43,12 +43,12 @@ if str(SCRIPT_DIR) not in sys.path:
 
 sys.path.insert(0, str(ROOT_DIR))
 from utils.paths import get_path
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset
 
 from backbone_dependent_rotamer_lib import BackboneDependentRotamerLibrary
 from backbone_independent_rotamer_lib import BackboneIndependentRotamerLibrary
 
 # Dataset paths
-RBP_CLEAN_TSV = ROOT_DIR / "input_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
 PPI_UNBOUND1_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND1_257.csv"
 PPI_UNBOUND2_CSV = get_path("protein_protein_dir") / "output_files" / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_PROTEIN_PROTEIN_UNBOUND2_257.csv"
 
@@ -95,8 +95,8 @@ def export_unified_library_files(lib_dict, output_dir, prefix):
 def derive_rbp_rotamer_libraries():
     logging.info("==================================================")
     logging.info("1. DERIVING PROTEIN-RNA (RBPs) ROTAMER LIBRARIES")
-    logging.info(f"Loading verified RBP dataset: {RBP_CLEAN_TSV}")
-    df_rbp = pd.read_csv(RBP_CLEAN_TSV, sep=",")
+    logging.info(f"Loading verified RBP dataset: {TORSION_DATASET}")
+    df_rbp = load_torsion_dataset()
 
     bbd_calc = BackboneDependentRotamerLibrary(bb_sep=30)
     bbi_calc = BackboneIndependentRotamerLibrary()
