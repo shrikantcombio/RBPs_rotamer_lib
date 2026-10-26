@@ -81,9 +81,9 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from utils.paths import get_path
+from utils.torsion_dataset import load_torsion_dataset
 
 DATASET_DIR = ROOT_DIR / "input_files"
-TORSION_DATASET = DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
 COMPLEX_LIST = DATASET_DIR / "PRDBv3_pdbList_chains.json"
 PRDB_INFO = ROOT_DIR / "PRDBv3_dataset" / "PRDBv3.0" / "PRDBv3_info.csv"
 RESULTS_DIR = ROOT_DIR / "output_files" / "backbone_deviation"
@@ -213,7 +213,7 @@ def n_chi_bins(aa, chi_idx):
 
 
 def build_residue_table(rebuild_covariates=False):
-    df = pd.read_csv(TORSION_DATASET)
+    df = load_torsion_dataset()
     df["AA"] = df["LABEL"].str[:3]
     n0 = len(df)
     df = df[df["AA"].isin(rotdef.RESIDUE_CHI_COUNTS) & (df["AA"] != "PRO")]

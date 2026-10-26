@@ -11,7 +11,7 @@ python script/backbone_deviation.py            # ~1 min; --rebuild-covariates re
 
 ## Data
 
-- `input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`: 187 PRDBv3 complexes,
+- `output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.json` (from `script/calculate_187_prdbv3_protein_torsions.py`): 187 PRDBv3 complexes,
   bound and unbound residues paired.
 - Every bound complex is an X-ray structure. The unbound protein is an X-ray structure, except for
   14 complexes with no free crystal structure, where an NMR structure was used.
