@@ -28,8 +28,8 @@ RBPs_rotamer_lib/
 │   ├── RBPs_S_bbi_U_rotamer_lib.[csv|tsv|json]   # Unbound Surface (S = I + N)
 │   ├── RBPs_bbi_B_rotamer_lib.[csv|tsv|json]     # Bound, all residues (I + N + C)
 │   └── RBPs_bbi_U_rotamer_lib.[csv|tsv|json]     # Unbound, all residues (I + N + C)
-├── input_files/                  # Cleaned input datasets (PRDBv3 187/288 complexes)
-├── output_files/                 # Torsion angle dataset exports (CSV, TSV, JSON)
+├── input_files/                  # PRDBv3 complex list; archive/ holds superseded datasets
+├── output_files/                 # Torsion dataset (torsion_dataset/) and analysis outputs
 ├── script/                       # Core python engines for derivation & analysis
 └── utils/                        # Structure parsing utilities (mmcif_clean_reader)
 ```
@@ -157,10 +157,9 @@ Residues are categorized based on surface accessibility and interface burial usi
 4. Tests: `python test/test_rotamer_definitions.py`.
 5. Transition matrices: `python script/rotamer_transition_matrix.py` (writes
    `output_files/transition_matrices_v2/` and `figure(s)/transition_matrices_v2/`).
-6. Backbone log-odds: `python script/backbone_logodds_analysis_final.py --torsion
-   input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv --bbd-dir
-   ../rota_assign/rota_lib_dict/v2/bbd --output-dir output_files/logodds_v2` (the BBD cache is built
-   by rota_assign on first use).
+6. Backbone log-odds: `python script/backbone_logodds_analysis_final.py --bbd-dir
+   ../rota_assign/rota_lib_dict/v2/bbd --output-dir output_files/logodds_v2` (reads the torsion
+   dataset by default; the BBD cache is built by rota_assign on first use).
 
 Both steps are deterministic: rerunning them on the same inputs reproduces the committed files byte for byte.
 

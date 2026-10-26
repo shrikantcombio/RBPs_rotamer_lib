@@ -16,7 +16,7 @@ python script/backbone_scatter_plot.py --plots 3d   # or: ramachandran
 bound (X-ray) and unbound (X-ray; NMR for 14 complexes) residues paired.
 
 - Missing angles are empty in this file and are left out of each plot.
-- The earlier input, `PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`, stored missing
+- The earlier input, `input_files/archive/PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`, stored missing
   χ as 0.0 (12,512 χ2 values) and had no core region. It is no longer used.
 
 ## Figures
