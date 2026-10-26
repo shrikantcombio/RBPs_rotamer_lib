@@ -41,7 +41,6 @@ Outputs
 Usage
 -----
   python script/backbone_logodds_analysis_final.py \\
-      --torsion  input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv \\
       --bbd-dir  ../rota_assign/rota_lib_dict/v2/bbd \\
       --output-dir output_files/logodds_v2 \\
       --bb-sep 30
@@ -91,6 +90,9 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rotamer_definitions as rotdef
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset
 
 logging.basicConfig(
     level=logging.INFO,
@@ -842,8 +844,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__)
     parser.add_argument(
-        "--torsion", type=Path, required=True,
-        help="Path to torsion angle JSON (preferred) or TSV/CSV file")
+        "--torsion", type=Path, default=TORSION_DATASET,
+        help="Torsion angle dataset (default: the 187-complex bound/unbound JSON)")
     parser.add_argument(
         "--bbd-dir", type=Path, required=True,
         help="Directory containing the four BBD JSON library files")
@@ -856,21 +858,8 @@ def main():
     args = parser.parse_args()
 
     # ── Load torsion data ──────────────────────────────────────────────────
-    torsion_path = args.torsion
-    if not torsion_path.exists():
-        alt_path = Path(__file__).resolve().parent.parent / "input_files" / args.torsion.name
-        if alt_path.exists():
-            torsion_path = alt_path
-
-    logging.info(f"Loading torsion data: {torsion_path}")
-    suffix = torsion_path.suffix.lower()
-    if suffix == ".json":
-        df = pd.read_json(torsion_path)
-    else:
-        for sep in (",", "\t"):
-            df = pd.read_csv(torsion_path, sep=sep)
-            if "LABEL" in df.columns or "AA" in df.columns:
-                break
+    logging.info(f"Loading torsion data: {args.torsion}")
+    df = load_torsion_dataset(args.torsion)
     logging.info(f"Loaded {len(df):,} rows")
 
     # ── Load BBD libraries ─────────────────────────────────────────────────
