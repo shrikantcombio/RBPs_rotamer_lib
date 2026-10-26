@@ -2,421 +2,336 @@
 """
 sidechain_torsion_distribution.py
 
-Calculates the continuous distribution of side-chain torsion (Chi) angles
-for all 20 standard amino acids in protein structures (Bound vs Unbound states).
-Generates distribution summary statistics and publication-quality figures.
+Side-chain torsion (chi) distributions of the bound and unbound proteins of the 187 PRDBv3
+complexes, with MolProbity Top8000 rotamer validation (Richardson lab reference_data, CC-BY-4.0;
+Hintze et al. 2016 Proteins 84:1177; Williams et al. 2018 Protein Sci 27:293).
+
+Angle conventions:
+  - Two-fold symmetric terminal chis (ASP chi2, GLU chi3, PHE chi2, TYR chi2) are folded into
+    their 180-degree canonical range (rotamer_definitions.TERMINAL_SP2_CHI), as in the rotamer
+    libraries and in MolProbity: an OD1/OD2, OE1/OE2 or ring-flip relabelling is the same
+    conformation.
+  - ARG chi5 (CD-NE-CZ-NH1) is planar and NH1/NH2 are equivalent, so chi5 near 0 and near 180
+    are the same; it is shown as the deviation from planarity, folded into [-90, 90).
+  - Rotamer bins are the library bins (rotamer_definitions.chi_class): p / t / m for sp3 chis,
+    residue-specific modes for terminal sp2 chis. A single mean of a multi-modal chi is not
+    meaningful, so statistics are given per bin.
+
+Top8000 rotamer validation (as in MolProbity rotalyze): the residue's chis (all of them; PRO chi1
+only) are looked up in the Top8000 rotamer grid of its type (linear interpolation, periodic);
+value >= 0.02 Favored, >= 0.003 Allowed, else Outlier. Residues with a missing chi are not scored.
+
+Outputs (output_files/sidechain_distributions/):
+  chi_bin_summary.csv        per residue type, chi, state and bin: count, %, circular mean / SD
+  rotamer_validation.csv     per residue: Top8000 score and region, bound and unbound
+  rotamer_validation_summary.csv  per state, region (I / N / C / all) and residue type
+Figures (figure(s)/sidechain_distributions/):
+  <group>_CHI_distribution.png     chi histograms, bound (filled) vs unbound (outline), with the
+                                   Top8000 rotamer centres (frequency >= 1%) marked
+  chi1_chi2/<AA>_{B,U}_chi1_chi2.png  chi1 vs chi2 scatter in the manuscript style over the Top8000
+                                   favored / allowed regions (for residues with more chis, the
+                                   region where some value of the other chis is favored / allowed)
 
 Usage:
-    python script/sidechain_torsion_distribution.py [options]
+    python script/sidechain_torsion_distribution.py [--region all|I|N|C]
 """
 
 import argparse
 import logging
 import sys
 from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+from matplotlib.patches import Patch
+from scipy.stats import circmean, circstd
 
-# Setup logging
+import rotamer_definitions as rotdef
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ROOT_DIR))
+from utils.top8000 import TOP8000_DIR, Top8000Grid  # noqa: E402
 from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
-RESULTS_DIR = ROOT_DIR / "output_files"
-FIGURES_DIR = ROOT_DIR / "figures" / "sidechain_distributions"
 
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+RESULTS_DIR = ROOT_DIR / "output_files" / "sidechain_distributions"
+FIGURES_DIRS = [ROOT_DIR / "figure" / "sidechain_distributions", ROOT_DIR / "figures" / "sidechain_distributions"]
+ROTA_GRID_DIR = TOP8000_DIR / "Top8000_rotamer_pct_contour_grids"
+ROTA_CENTRES_DIR = TOP8000_DIR / "Top8000_rotamer_central_values"
 
-# Set global Matplotlib / Seaborn style
-plt.style.use("tableau-colorblind10")
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica"]
-plt.rcParams["axes.edgecolor"] = "#333333"
-plt.rcParams["axes.linewidth"] = 1.0
+FAVORED, ALLOWED = 0.02, 0.003
+REGION_NAMES = {"all": "all residues", "I": "interface", "N": "non-interface surface", "C": "core"}
+CHI_COUNTS = {aa: n + (1 if aa == "ARG" else 0) for aa, n in rotdef.RESIDUE_CHI_COUNTS.items()}  # + ARG chi5
+# Top8000 grid per residue type and how many chis it uses
+ROTA_GRIDS = {"ARG": ("arg", 4), "ASN": ("asn", 2), "ASP": ("asp", 2), "CYS": ("cys", 1),
+              "GLN": ("gln", 3), "GLU": ("glu", 3), "HIS": ("his", 2), "ILE": ("ile", 2),
+              "LEU": ("leu", 2), "LYS": ("lys", 4), "MET": ("met", 3), "PHE": ("phetyr", 2),
+              "PRO": ("pro", 1), "SER": ("ser", 1), "THR": ("thr", 1), "TRP": ("trp", 2),
+              "TYR": ("phetyr", 2), "VAL": ("val", 1)}
+GROUPS = [("ARG", ["ARG"]), ("LYS", ["LYS"]), ("GLU_GLN_MET", ["GLU", "GLN", "MET"]),
+          ("ASP_ASN", ["ASP", "ASN"]), ("LEU_ILE", ["LEU", "ILE"]), ("PHE_HIS", ["PHE", "HIS"]),
+          ("TRP_TYR", ["TRP", "TYR"]), ("CYS_SER_THR_VAL", ["CYS", "SER", "THR", "VAL"]), ("PRO", ["PRO"])]
 
-# Number of Chi angles per amino acid
-RESIDUE_CHI_MAP = {
-    "ARG": ["CHI1", "CHI2", "CHI3", "CHI4", "CHI5"],
-    "LYS": ["CHI1", "CHI2", "CHI3", "CHI4"],
-    "GLN": ["CHI1", "CHI2", "CHI3"],
-    "GLU": ["CHI1", "CHI2", "CHI3"],
-    "MET": ["CHI1", "CHI2", "CHI3"],
-    "ASN": ["CHI1", "CHI2"],
-    "ASP": ["CHI1", "CHI2"],
-    "HIS": ["CHI1", "CHI2"],
-    "ILE": ["CHI1", "CHI2"],
-    "LEU": ["CHI1", "CHI2"],
-    "PHE": ["CHI1", "CHI2"],
-    "PRO": ["CHI1", "CHI2"],
-    "TRP": ["CHI1", "CHI2"],
-    "TYR": ["CHI1", "CHI2"],
-    "CYS": ["CHI1"],
-    "SER": ["CHI1"],
-    "THR": ["CHI1"],
-    "VAL": ["CHI1"],
-    "ALA": [],
-    "GLY": [],
-}
+# Manuscript scatter style (final_clustering/phi_psi_scatter_plot.ipynb)
+POINT_COLOR, OUTLIER_COLOR = "#3F51B5", "#eb6834"
+BOUND_COLOR, UNBOUND_COLOR = "#3F51B5", "#eb6834"
+FAVORED_FILL, ALLOWED_FILL, CONTOUR_LINE = "#d6d5cf", "#efeeea", "#9a9993"
+TEXT_COLOR, MUTED_COLOR = "#1f1f1e", "#6b6a64"
+
+plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans", "Arial", "Helvetica"]})
 
 
-def _filter_res_df(df, res):
-    if "LABEL" in df.columns:
-        return df[df["LABEL"].astype(str).str[:3] == res]
-    elif "AA" in df.columns:
-        return df[df["AA"].astype(str).str[:3] == res]
-    else:
-        return pd.DataFrame()
+# ----------------------------------------------------------------------------------------------
+# Angle conventions
+# ----------------------------------------------------------------------------------------------
+def display_range(aa, k):
+    """(low, high, period) of chi k (1-based) as plotted."""
+    if aa == "ARG" and k == 5:
+        return -90.0, 90.0, 180.0
+    if aa == "PRO":
+        return -60.0, 60.0, 360.0
+    sp2 = rotdef.terminal_sp2(aa, k - 1)
+    if sp2 is not None and sp2[0] == 180:
+        return sp2[1], sp2[1] + 180.0, 180.0
+    return -180.0, 180.0, 360.0
 
 
-def get_max_bin_info(data_series, num_bins=36, angle_range=(-180, 180)):
-    """
-    Find the bin with maximum frequency count and compute member statistics.
-    """
-    valid_data = pd.Series(data_series, dtype=float).dropna()
-    valid_data = valid_data[(valid_data >= angle_range[0]) & (valid_data <= angle_range[1])]
-
-    if len(valid_data) == 0:
-        return {
-            "count": 0,
-            "max_bin_count": 0,
-            "max_bin_start": np.nan,
-            "max_bin_end": np.nan,
-            "max_bin_center": np.nan,
-        }
-
-    counts, bin_edges = np.histogram(valid_data, bins=num_bins, range=angle_range)
-    max_idx = np.argmax(counts)
-    bin_start = bin_edges[max_idx]
-    bin_end = bin_edges[max_idx + 1]
-    bin_center = (bin_start + bin_end) / 2.0
-
-    return {
-        "count": len(valid_data),
-        "max_bin_count": int(counts[max_idx]),
-        "max_bin_start": float(bin_start),
-        "max_bin_end": float(bin_end),
-        "max_bin_center": float(bin_center),
-    }
+def display_angles(aa, k, angles):
+    low, _, period = display_range(aa, k)
+    a = np.asarray(angles, float)
+    if period == 180.0:
+        return (a - low) % 180.0 + low
+    return (a + 180.0) % 360.0 - 180.0
 
 
-def compute_distribution_summary(df, state_prefix="B"):
-    """
-    Compute distribution summary statistics for all residues and Chi angles using circular statistics.
-    """
-    from scipy.stats import circmean, circstd
-    logging.info(f"Computing distribution statistics for state '{state_prefix}'...")
-    summary_rows = []
+def bin_label(aa, k, angle):
+    if aa == "ARG" and k == 5:
+        return "planar"
+    sp2 = rotdef.terminal_sp2(aa, k - 1)
+    if sp2 is not None:
+        return rotdef.terminal_sp2_label(aa, k - 1, angle)
+    return "ptm"[rotdef.chi_class(aa, k - 1, angle)]
 
-    for res, chi_list in RESIDUE_CHI_MAP.items():
-        if not chi_list:
-            continue
 
-        if "LABEL" in df.columns:
-            res_df = df[df["LABEL"].astype(str).str[:3] == res]
-        elif "AA" in df.columns:
-            res_df = df[df["AA"].astype(str).str[:3] == res]
-        else:
-            continue
-        for chi in chi_list:
-            col_name = f"{state_prefix}_{chi}"
-            if col_name not in res_df.columns:
-                continue
-
-            series = res_df[col_name]
-            # Exclude NaN or null values while preserving valid 0.0 deg dihedrals
-            valid_vals = []
-            for v in series.dropna():
-                try:
-                    vf = float(v)
-                    if not np.isnan(vf):
-                        valid_vals.append(vf)
-                except (ValueError, TypeError):
+# ----------------------------------------------------------------------------------------------
+# Tables
+# ----------------------------------------------------------------------------------------------
+def chi_bin_summary(df, region):
+    rows = []
+    for aa, n_chi in CHI_COUNTS.items():
+        sub = df[df["AA"] == aa]
+        for k in range(1, n_chi + 1):
+            low, high, period = display_range(aa, k)
+            for s in "BU":
+                vals = display_angles(aa, k, sub[f"{s}_CHI{k}"].dropna())
+                if len(vals) == 0:
                     continue
-
-            valid_arr = np.array(valid_vals, dtype=float)
-
-            if len(valid_arr) > 0:
-                mean_val = float(circmean(valid_arr, high=180.0, low=-180.0))
-                std_val = float(circstd(valid_arr, high=180.0, low=-180.0))
-            else:
-                mean_val = np.nan
-                std_val = np.nan
-
-            max_info = get_max_bin_info(valid_arr, num_bins=36)
-
-            summary_rows.append(
-                {
-                    "RESIDUE": res,
-                    "CHI_ANGLE": chi,
-                    "STATE": state_prefix,
-                    "TOTAL_COUNT": max_info["count"],
-                    "MEAN_ANGLE": round(mean_val, 2) if not np.isnan(mean_val) else np.nan,
-                    "STD_ANGLE": round(std_val, 2) if not np.isnan(std_val) else np.nan,
-                    "PEAK_BIN_CENTER": round(max_info["max_bin_center"], 2) if not np.isnan(max_info["max_bin_center"]) else np.nan,
-                    "PEAK_BIN_RANGE": f"[{max_info['max_bin_start']:.1f}, {max_info['max_bin_end']:.1f}]" if not np.isnan(max_info["max_bin_start"]) else "N/A",
-                    "PEAK_BIN_COUNT": max_info["max_bin_count"],
-                }
-            )
-
-    return pd.DataFrame(summary_rows)
+                labels = np.array([bin_label(aa, k, v) for v in vals])
+                for lab in dict.fromkeys(labels):
+                    v = vals[labels == lab]
+                    rows.append({"REGION": region, "RESIDUE": aa, "CHI": f"CHI{k}", "STATE": s, "BIN": lab,
+                                 "COUNT": len(v), "PCT": round(len(v) / len(vals) * 100, 2),
+                                 "CIRC_MEAN": round(float(circmean(v, high=high, low=low)), 2),
+                                 "CIRC_SD": round(float(circstd(v, high=high, low=low)), 2),
+                                 "PERIOD": int(period)})
+    return pd.DataFrame(rows)
 
 
-def format_axis(ax, title, xlabel, ylabel, xlim=(-180, 180), xtick_step=60, y_limit=None):
-    """
-    Helper function to apply clean, consistent publication styling to plot axes.
-    """
-    ax.set_title(title, fontsize=14, fontweight="bold", pad=8)
-    if xlabel:
-        ax.set_xlabel(xlabel, fontsize=12)
-    else:
-        ax.set_xlabel("")
-
-    if ylabel:
-        ax.set_ylabel(ylabel, fontsize=12)
-    else:
-        ax.set_ylabel("")
-
-    ax.set_xlim(xlim)
-    xticks = np.arange(xlim[0], xlim[1] + 1, xtick_step)
-    ax.set_xticks(xticks)
-    ax.set_xticklabels([f"{x}°" for x in xticks], rotation=0, fontsize=10)
-
-    if y_limit:
-        ax.set_ylim(0, y_limit)
-
-    ax.grid(True, linestyle="--", alpha=0.4)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+def load_rotamer_grids():
+    return {name: Top8000Grid(ROTA_GRID_DIR / f"rota8000-{name}.data") for name, _ in set(ROTA_GRIDS.values())}
 
 
-def _save_figure(fig, save_path):
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        logging.info(f"Saved figure: {save_path}")
+def rotamer_validation(df, grids):
+    out = df[["PDB", "LABEL", "AA", "SASA"]].copy()
+    for s in "BU":
+        score = np.full(len(df), np.nan)
+        for aa, (name, n) in ROTA_GRIDS.items():
+            m = (df["AA"] == aa).to_numpy()
+            chis = [df.loc[m, f"{s}_CHI{k}"].to_numpy(float) for k in range(1, n + 1)]
+            score[m] = grids[name](*chis)
+        out[f"{s}_ROTA_SCORE"] = score
+        out[f"{s}_ROTA_REGION"] = np.where(np.isnan(score), None,
+                                           np.where(score >= FAVORED, "Favored",
+                                                    np.where(score >= ALLOWED, "Allowed", "Outlier")))
+    return out
+
+
+def validation_summary(val):
+    rows = []
+    for s in "BU":
+        d = val.dropna(subset=[f"{s}_ROTA_REGION"])
+        for region in ["all", "I", "N", "C"]:
+            r = d if region == "all" else d[d["SASA"] == region]
+            for aa, g in [("All", r)] + list(r.groupby("AA")):
+                counts = g[f"{s}_ROTA_REGION"].value_counts()
+                n = len(g)
+                rec = {"STATE": s, "REGION": region, "RESIDUE": aa, "TOTAL_COUNT": n}
+                for lab in ("Favored", "Allowed", "Outlier"):
+                    rec[f"{lab.upper()}_COUNT"] = int(counts.get(lab, 0))
+                    rec[f"{lab.upper()}_PCT"] = round(counts.get(lab, 0) / n * 100, 2) if n else np.nan
+                rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+# ----------------------------------------------------------------------------------------------
+# Figures
+# ----------------------------------------------------------------------------------------------
+def save(fig, name):
+    for out_dir in FIGURES_DIRS:
+        (out_dir / Path(name).parent).mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_dir / name, dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_arg_distribution(df, state="B", kde=True, save_path=None):
-    """Plot Chi1 to Chi4 distributions for Arginine (ARG) in a 2x2 grid."""
-    arg_df = _filter_res_df(df, "ARG")
-    if len(arg_df) == 0:
-        logging.warning("No data found for ARG.")
-        return
-
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    fig.suptitle(f"Arginine (ARG) Side-Chain Torsion Distributions (State: {state})", fontsize=14, fontweight="bold")
-
-    chi_cols = [f"{state}_CHI{i}" for i in range(1, 5)]
-    titles = [r"$\chi_1$ Dihedral", r"$\chi_2$ Dihedral", r"$\chi_3$ Dihedral", r"$\chi_4$ Dihedral"]
-
-    for idx, (ax, col, title) in enumerate(zip(axes.flat, chi_cols, titles)):
-        if col in arg_df.columns:
-            data = arg_df[col].dropna()
-            if len(data) > 0:
-                sns.histplot(data, bins=36, kde=kde, ax=ax, color="#00468B", edgecolor="black", alpha=0.7)
-            format_axis(ax, title, f"{title} (deg)", "Density / Count")
-
-    plt.tight_layout()
-    _save_figure(fig, save_path)
+def top8000_centres(aa, k, min_freq=1.0):
+    """Chi k centres of the Top8000 rotamers of `aa` with frequency >= min_freq %, as plotted."""
+    path = ROTA_CENTRES_DIR / f"{aa}.csv"
+    col = f"chi{k}_mean"
+    if not path.exists():
+        return []
+    c = pd.read_csv(path)
+    if col not in c.columns:
+        return []
+    vals = display_angles(aa, k, c.loc[c["frequency%"] >= min_freq, col].dropna())
+    out = []
+    for v in sorted(vals):
+        if all(min(abs(v - u), 360 - abs(v - u)) > 6 for u in out):
+            out.append(v)
+    return out
 
 
-def plot_lys_distribution(df, state="B", kde=True, save_path=None):
-    """Plot Chi1 to Chi4 distributions for Lysine (LYS) in a 2x2 grid."""
-    lys_df = _filter_res_df(df, "LYS")
-    if len(lys_df) == 0:
-        logging.warning("No data found for LYS.")
-        return
-
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    fig.suptitle(f"Lysine (LYS) Side-Chain Torsion Distributions (State: {state})", fontsize=14, fontweight="bold")
-
-    chi_cols = [f"{state}_CHI{i}" for i in range(1, 5)]
-    titles = [r"$\chi_1$ Dihedral", r"$\chi_2$ Dihedral", r"$\chi_3$ Dihedral", r"$\chi_4$ Dihedral"]
-
-    for idx, (ax, col, title) in enumerate(zip(axes.flat, chi_cols, titles)):
-        if col in lys_df.columns:
-            data = lys_df[col].dropna()
-            if len(data) > 0:
-                sns.histplot(data, bins=36, kde=kde, ax=ax, color="#ED0000", edgecolor="black", alpha=0.7)
-            format_axis(ax, title, f"{title} (deg)", "Density / Count")
-
-    plt.tight_layout()
-    _save_figure(fig, save_path)
-
-
-def plot_glu_gln_met_distribution(df, state="B", kde=True, save_path=None):
-    """Plot Chi1 to Chi3 distributions for GLU, GLN, and MET in a 3x3 grid."""
-    fig, axs = plt.subplots(3, 3, figsize=(12, 10), sharex=True)
-    residues = ["GLU", "GLN", "MET"]
-    chi_angles = ["CHI1", "CHI2", "CHI3"]
-    colors = ["#7570b3", "#e7298a", "#66a61e"]
-
-    for r, res in enumerate(residues):
-        res_df = _filter_res_df(df, res)
-        for c, chi in enumerate(chi_angles):
-            ax = axs[r, c]
-            col = f"{state}_{chi}"
-            if col in res_df.columns:
-                data = res_df[col].dropna()
-                if len(data) > 0:
-                    sns.histplot(
-                        data,
-                        bins=36,
-                        binrange=(-180, 180),
-                        kde=kde,
-                        color=colors[r],
-                        edgecolor="white",
-                        ax=ax,
-                        alpha=0.7,
-                    )
-            xlabel = r"$\chi_{" + chi[-1] + r"}$ (degrees)" if r == 2 else None
-            ylabel = "Count" if c == 0 else None
-            format_axis(ax, f"{res} {chi}", xlabel, ylabel)
-
-    plt.tight_layout()
-    _save_figure(fig, save_path)
+def plot_group(df, name, residues, region):
+    n_cols = max(CHI_COUNTS[aa] for aa in residues)
+    fig, axes = plt.subplots(len(residues), n_cols, figsize=(3.3 * n_cols + 0.4, 2.7 * len(residues)),
+                             squeeze=False)
+    for row, aa in enumerate(residues):
+        sub = df[df["AA"] == aa]
+        for col in range(n_cols):
+            ax = axes[row, col]
+            k = col + 1
+            if k > CHI_COUNTS[aa]:
+                ax.axis("off")
+                continue
+            low, high, period = display_range(aa, k)
+            width = 5.0 if period == 180 or aa == "PRO" else 10.0
+            bins = np.arange(low, high + width / 2, width)
+            for s, color, kw in (("B", BOUND_COLOR, dict(histtype="stepfilled", alpha=0.35)),
+                                 ("U", UNBOUND_COLOR, dict(histtype="step", linewidth=1.4))):
+                vals = display_angles(aa, k, sub[f"{s}_CHI{k}"].dropna())
+                weights = np.full(len(vals), 100.0 / max(len(vals), 1))
+                ax.hist(vals, bins=bins, weights=weights, color=color, **kw)
+            for c in top8000_centres(aa, k):
+                ax.axvline(c, color=MUTED_COLOR, linewidth=0.6, linestyle=":", zorder=0)
+            n = sub[[f"B_CHI{k}", f"U_CHI{k}"]].notna().all(axis=1).sum()
+            note = " (mod 180°)" if period == 180 and not (aa == "ARG" and k == 5) else \
+                (" (planarity, mod 180°)" if aa == "ARG" and k == 5 else "")
+            ax.set_title(rf"{aa} $\chi_{k}${note}", fontsize=10)
+            ax.text(0.98, 0.95, f"n = {n:,}", transform=ax.transAxes, ha="right", va="top", fontsize=7,
+                    color=MUTED_COLOR)
+            step = 30 if (high - low) <= 180 else 60
+            ax.set_xlim(low, high)
+            ax.set_xticks(np.arange(low, high + 1, step))
+            ax.tick_params(labelsize=8)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            if col == 0:
+                ax.set_ylabel("Residues (%)", fontsize=9)
+    handles = [Patch(facecolor=BOUND_COLOR, alpha=0.35, label="Bound"),
+               Patch(facecolor="none", edgecolor=UNBOUND_COLOR, linewidth=1.4, label="Unbound"),
+               plt.Line2D([], [], color=MUTED_COLOR, linestyle=":", label="Top8000 rotamer centres (≥ 1%)")]
+    fig.tight_layout(rect=(0, 0, 1, 0.94 if len(residues) > 1 else 0.86))
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=9,
+               bbox_to_anchor=(0.5, 0.94 if len(residues) > 1 else 0.86))
+    if region != "all":
+        fig.suptitle(REGION_NAMES[region].capitalize(), fontsize=11, y=1.0)
+    save(fig, f"{name}_CHI_distribution{'' if region == 'all' else '_' + region}.png")
 
 
-def plot_two_chi_pairs_distribution(df, res1, res2, title_prefix, color="#1b9e77", state="B", kde=True, save_path=None):
-    """Plot Chi1 and Chi2 distributions for a pair of amino acids (e.g. ASP/ASN, LEU/ILE, PHE/HIS, TRP/TYR) in a 2x2 grid."""
-    fig, axs = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
-    res1_df = _filter_res_df(df, res1)
-    res2_df = _filter_res_df(df, res2)
-
-    c1 = f"{state}_CHI1"
-    c2 = f"{state}_CHI2"
-
-    if c1 in res1_df.columns:
-        sns.histplot(res1_df[c1].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 0], alpha=0.7)
-    if c1 in res2_df.columns:
-        sns.histplot(res2_df[c1].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[0, 1], alpha=0.7)
-    if c2 in res1_df.columns:
-        sns.histplot(res1_df[c2].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 0], alpha=0.7)
-    if c2 in res2_df.columns:
-        sns.histplot(res2_df[c2].dropna(), bins=36, binrange=(-180, 180), kde=kde, color=color, ax=axs[1, 1], alpha=0.7)
-
-    format_axis(axs[0, 0], f"{res1} $\chi_1$", None, "Count")
-    format_axis(axs[0, 1], f"{res2} $\chi_1$", None, None)
-    format_axis(axs[1, 0], f"{res1} $\chi_2$", r"$\chi_2$ (degrees)", "Count")
-    format_axis(axs[1, 1], f"{res2} $\chi_2$", r"$\chi_2$ (degrees)", None)
-
-    plt.tight_layout()
-    _save_figure(fig, save_path)
+def chi1_chi2_regions(aa, grids):
+    """Display mesh and Top8000 values for chi1 x chi2 (max over further chis)."""
+    name, n = ROTA_GRIDS[aa]
+    grid = grids[name].project_max([0, 1]) if n > 2 else grids[name]
+    lo2, hi2, _ = display_range(aa, 2)
+    x = np.arange(-180, 181, 2.0)
+    y = np.arange(lo2, hi2 + 1, 2.0 if hi2 - lo2 > 180 else 1.0)
+    xx, yy = np.meshgrid(x, y)
+    return x, y, grid(xx, yy)
 
 
-def plot_single_chi_group_distribution(df, residues=["CYS", "SER", "THR", "VAL"], state="B", kde=True, save_path=None):
-    """Plot Chi1 distribution for single-Chi residues (CYS, SER, THR, VAL) in a 2x2 grid."""
-    fig, axs = plt.subplots(2, 2, figsize=(10, 8), sharex=True)
-    coords = [(0, 0), (0, 1), (1, 0), (1, 1)]
-    colors = ["#e6ab02", "#a6761d", "#666666", "#e7298a"]
+def plot_chi1_chi2(df, val, grids, aa, s, region):
+    sub = df[df["AA"] == aa]
+    keep = sub[[f"{s}_CHI1", f"{s}_CHI2"]].notna().all(axis=1)
+    sub, v = sub[keep], val.loc[sub.index[keep], f"{s}_ROTA_REGION"]
+    x1, x2 = display_angles(aa, 1, sub[f"{s}_CHI1"]), display_angles(aa, 2, sub[f"{s}_CHI2"])
+    out = (v == "Outlier").to_numpy()
+    lo2, hi2, period2 = display_range(aa, 2)
 
-    for idx, (res, (r, c)) in enumerate(zip(residues, coords)):
-        ax = axs[r, c]
-        res_df = _filter_res_df(df, res)
-        col = f"{state}_CHI1"
-        if col in res_df.columns:
-            data = res_df[col].dropna()
-            if len(data) > 0:
-                sns.histplot(
-                    data,
-                    bins=36,
-                    binrange=(-180, 180),
-                    kde=kde,
-                    color=colors[idx],
-                    edgecolor="white",
-                    ax=ax,
-                    alpha=0.7,
-                )
-        xlabel = r"$\chi_1$ (degrees)" if r == 1 else None
-        ylabel = "Count" if c == 0 else None
-        format_axis(ax, f"{res} $\chi_1$", xlabel, ylabel)
+    fig, ax = plt.subplots(figsize=(4, 4 if period2 == 360 else 2.6))
+    gx, gy, gz = chi1_chi2_regions(aa, grids)
+    ax.contourf(gx, gy, gz, levels=[ALLOWED, FAVORED, np.inf], colors=[ALLOWED_FILL, FAVORED_FILL], zorder=0)
+    ax.contour(gx, gy, gz, levels=[ALLOWED, FAVORED], colors=CONTOUR_LINE, linewidths=0.6, zorder=1)
+    ax.scatter(x1[~out], x2[~out], s=10, alpha=0.6, color=POINT_COLOR, marker="P", linewidths=0,
+               rasterized=True, zorder=2)
+    ax.scatter(x1[out], x2[out], s=14, color=OUTLIER_COLOR, marker="X", linewidths=0, zorder=3)
 
-    plt.tight_layout()
-    _save_figure(fig, save_path)
-
-
-def plot_proline_distribution(df, state="B", kde=True, save_path=None):
-    """Plot Chi1 and Chi2 distribution for Proline (PRO) in a 1x2 grid (-60° to 60° range)."""
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4.5))
-    pro_df = _filter_res_df(df, "PRO")
-
-    c1 = f"{state}_CHI1"
-    c2 = f"{state}_CHI2"
-
-    if c1 in pro_df.columns:
-        sns.histplot(pro_df[c1].dropna(), bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[0], alpha=0.7)
-    if c2 in pro_df.columns:
-        sns.histplot(pro_df[c2].dropna(), bins=36, binrange=(-60, 60), kde=kde, color="#333333", ax=axs[1], alpha=0.7)
-
-    format_axis(axs[0], r"PRO $\chi_1$", r"$\chi_1$ (degrees)", "Count", xlim=(-60, 60), xtick_step=20)
-    format_axis(axs[1], r"PRO $\chi_2$", r"$\chi_2$ (degrees)", None, xlim=(-60, 60), xtick_step=20)
-
-    plt.tight_layout()
-    _save_figure(fig, save_path)
-
-
-def generate_all_distribution_plots(df, state="B", kde=True, figures_dir=FIGURES_DIR):
-    """Generate and save all distribution figure subplots."""
-    logging.info(f"Generating distribution plots for state '{state}'...")
-
-    plot_arg_distribution(df, state=state, kde=kde, save_path=figures_dir / f"ARG_{state}_CHI_distribution.png")
-    plot_lys_distribution(df, state=state, kde=kde, save_path=figures_dir / f"LYS_{state}_CHI_distribution.png")
-    plot_glu_gln_met_distribution(df, state=state, kde=kde, save_path=figures_dir / f"GLU_GLN_MET_{state}_CHI_distribution.png")
-    plot_two_chi_pairs_distribution(df, "ASP", "ASN", "ASP_ASN", color="#1b9e77", state=state, kde=kde, save_path=figures_dir / f"ASP_ASN_{state}_CHI_distribution.png")
-    plot_two_chi_pairs_distribution(df, "LEU", "ILE", "LEU_ILE", color="#d95f02", state=state, kde=kde, save_path=figures_dir / f"LEU_ILE_{state}_CHI_distribution.png")
-    plot_two_chi_pairs_distribution(df, "PHE", "HIS", "PHE_HIS", color="#7570b3", state=state, kde=kde, save_path=figures_dir / f"PHE_HIS_{state}_CHI_distribution.png")
-    plot_two_chi_pairs_distribution(df, "TRP", "TYR", "TRP_TYR", color="#e7298a", state=state, kde=kde, save_path=figures_dir / f"TRP_TYR_{state}_CHI_distribution.png")
-    plot_single_chi_group_distribution(df, residues=["CYS", "SER", "THR", "VAL"], state=state, kde=kde, save_path=figures_dir / f"CYS_SER_THR_VAL_{state}_CHI_distribution.png")
-    plot_proline_distribution(df, state=state, kde=kde, save_path=figures_dir / f"PRO_{state}_CHI_distribution.png")
+    ax.set_xlim(-180, 180)
+    ax.set_ylim(lo2, hi2)
+    ax.set_xticks(np.arange(-180, 181, 60))
+    ax.set_yticks(np.arange(lo2, hi2 + 1, 60 if period2 == 360 else 30))
+    ax.tick_params(labelsize=12)
+    ax.set_xlabel(r"$\chi_1$ (°)", fontsize=14)
+    ax.set_ylabel(r"$\chi_2$ (°)" + (" mod 180" if period2 == 180 else ""), fontsize=14)
+    for pos in (0,):
+        ax.axvline(pos, linestyle="--", linewidth=0.8, color="#0072B2", zorder=1)
+        if lo2 < pos < hi2:
+            ax.axhline(pos, linestyle="--", linewidth=0.8, color="#0072B2", zorder=1)
+    ax.set_aspect("equal", adjustable="box")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    n_scored = v.notna().sum()
+    ax.set_title(aa, fontsize=15, pad=16)
+    scope = "" if ROTA_GRIDS[aa][1] <= 2 else f", judged on χ1–χ{ROTA_GRIDS[aa][1]}"
+    ax.text(0.5, 1.01, f"n = {len(sub):,}  ·  Top8000 outliers {out.sum()} ({out.sum() / max(n_scored, 1):.1%}){scope}",
+            transform=ax.transAxes, ha="center", va="bottom", fontsize=8, color="#4a4a46")
+    suffix = "" if region == "all" else f"_{region}"
+    save(fig, f"chi1_chi2/{aa}_{s}_chi1_chi2{suffix}.png")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Calculate side-chain torsion angle distributions and generate publication figures.")
-    parser.add_argument(
-        "--input-file",
-        type=Path,
-        default=TORSION_DATASET,
-        help="Path to dataset containing backbone & sidechain torsion angles.",
-    )
-    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV summary files.")
-    parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output directory for figures.")
-    parser.add_argument("--state", type=str, default="B", choices=["B", "U"], help="Protein state: 'B' for Bound, 'U' for Unbound.")
-    parser.add_argument("--no-kde", action="store_true", help="Disable Kernel Density Estimation (KDE) curve overlay.")
-
+    parser = argparse.ArgumentParser(description="Side-chain torsion distributions with Top8000 rotamer validation.")
+    parser.add_argument("--dataset-file", type=Path, default=TORSION_DATASET, help="Torsion angle dataset.")
+    parser.add_argument("--region", default="all", choices=["all", "I", "N", "C"],
+                        help="Residues plotted: all, interface (I), non-interface surface (N) or core (C).")
+    parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for tables.")
     args = parser.parse_args()
 
+    df = load_torsion_dataset(args.dataset_file)
+    df["AA"] = df["LABEL"].str[:3]
+    df = df[df["AA"].isin(CHI_COUNTS)].reset_index(drop=True)
+    grids = load_rotamer_grids()
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    args.figures_dir.mkdir(parents=True, exist_ok=True)
+    val = rotamer_validation(df, grids)
+    val.to_csv(args.output_dir / "rotamer_validation.csv", index=False, float_format="%.5g")
+    vsum = validation_summary(val)
+    vsum.to_csv(args.output_dir / "rotamer_validation_summary.csv", index=False)
+    for s in "BU":
+        r = vsum[(vsum.STATE == s) & (vsum.REGION == "all") & (vsum.RESIDUE == "All")].iloc[0]
+        logging.info(f"{s}: {r.TOTAL_COUNT} side chains scored, favored {r.FAVORED_PCT}%, "
+                     f"Top8000 rotamer outliers {r.OUTLIER_COUNT} ({r.OUTLIER_PCT}%)")
 
-    if not args.input_file.exists():
-        logging.error(f"Input file not found: {args.input_file}")
-        return
-
-    df = load_torsion_dataset(args.input_file)
-
-    logging.info(f"Loaded dataset with {len(df)} residue entries.")
-
-    # 1. Compute summary statistics
-    df_summary = compute_distribution_summary(df, state_prefix=args.state)
-    summary_csv = args.output_dir / f"sidechain_torsion_distribution_summary_{args.state}.csv"
-    df_summary.to_csv(summary_csv, index=False)
-    logging.info(f"Saved distribution summary statistics to: {summary_csv}")
-
-    # 2. Generate plots
-    generate_all_distribution_plots(
-        df,
-        state=args.state,
-        kde=not args.no_kde,
-        figures_dir=args.figures_dir,
-    )
-
-    logging.info("Side-chain torsion distribution analysis completed successfully.")
+    plot_df = df if args.region == "all" else df[df["SASA"] == args.region]
+    chi_bin_summary(plot_df, args.region).to_csv(
+        args.output_dir / f"chi_bin_summary{'' if args.region == 'all' else '_' + args.region}.csv", index=False)
+    for name, residues in GROUPS:
+        plot_group(plot_df, name, residues, args.region)
+    for aa in [a for a, n in CHI_COUNTS.items() if n >= 2 and a != "PRO"]:
+        for s in "BU":
+            plot_chi1_chi2(plot_df, val, grids, aa, s, args.region)
+    logging.info(f"Tables in {args.output_dir}; figures in {FIGURES_DIRS[-1]}")
 
 
 if __name__ == "__main__":

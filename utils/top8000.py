@@ -43,6 +43,20 @@ class Top8000Grid:
         self.values = np.zeros(tuple(self.nbins))
         self.values[tuple(idx.T)] = rows[:, -1]
 
+    def project_max(self, keep):
+        """
+        Grid over the axes in `keep` holding the maximum over the other axes: a point of the
+        projection is at or above a contour level when some value of the dropped angles is.
+        """
+        proj = object.__new__(Top8000Grid)
+        keep = list(keep)
+        drop = tuple(i for i in range(self.ndim) if i not in keep)
+        proj.values = self.values.max(axis=drop) if drop else self.values.copy()
+        for attr in ("lower", "upper", "nbins", "width"):
+            setattr(proj, attr, getattr(self, attr)[keep])
+        proj.wrap = [self.wrap[i] for i in keep]
+        return proj
+
     @property
     def ndim(self):
         return len(self.nbins)
