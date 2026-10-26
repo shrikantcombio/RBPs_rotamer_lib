@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,6 +35,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATASET_DIR = ROOT_DIR / "input_files"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 RESULTS_DIR = ROOT_DIR / "output_files"
 FIGURES_DIR = ROOT_DIR / "figure"
 ALT_FIGURES_DIR = ROOT_DIR / "figures"
@@ -80,8 +83,8 @@ class RotamerPlot:
         excel_file : Path or str, optional
             Path to Figure_2_Tabulated_187.xlsx dataset.
         """
-        # Cleaned 187-complex dataset (comma-separated; missing angles empty, not 0.0)
-        self.dataset_file = Path(dataset_file) if dataset_file else DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+        # 187-complex bound/unbound dataset (missing angles NaN, not 0.0)
+        self.dataset_file = Path(dataset_file) if dataset_file else TORSION_DATASET
 
         # Stacked plots compute their counts from the torsion dataset unless an Excel file is given
         self.excel_file = Path(excel_file) if excel_file else None
@@ -97,12 +100,7 @@ class RotamerPlot:
             logging.error(f"Dataset file not found: {self.dataset_file}")
             return None
 
-        try:
-            df = pd.read_csv(self.dataset_file, sep=",")
-            if "LABEL" not in df.columns:
-                df = pd.read_csv(self.dataset_file, sep="\t")
-        except Exception:
-            df = pd.read_csv(self.dataset_file, sep="\t")
+        df = load_torsion_dataset(self.dataset_file)
 
         self._df_cache = df
         return df
@@ -260,7 +258,7 @@ class RotamerPlot:
 
         if self._stacked_plotter is None:
             excel = self.excel_file if self.excel_file is not None and self.excel_file.exists() else None
-            self._stacked_plotter = RBPRotamerDistributionPlotter(excel_file=excel)
+            self._stacked_plotter = RBPRotamerDistributionPlotter(excel_file=excel, dataset_file=self.dataset_file)
         self._stacked_plotter.plot_stacked_distribution(chi_level=chi_level, sasa_type=sasa_type, save_path=save_path)
 
     # =========================================================================

@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter, MaxNLocator
@@ -25,7 +26,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 DATASET_DIR = ROOT_DIR / "input_files"
-TORSION_DATASET = DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 RESULTS_DIR = ROOT_DIR / "output_files" / "rotamer_distribution"
 FIGURES_DIR = ROOT_DIR / "figure" / "rotamer_distribution"
 ALT_FIGURES_DIR = ROOT_DIR / "figures" / "rotamer_distribution"
@@ -61,7 +63,7 @@ class RBPRotamerDistributionPlotter:
             Pre-tabulated counts (one sheet per chi and region, e.g. Figure_2_Tabulated_187.xlsx).
             By default the counts are computed from the cleaned torsion dataset instead.
         dataset_file : Path or str, optional
-            Torsion dataset; default input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv.
+            Torsion dataset; default the 187-complex bound/unbound JSON (utils/torsion_dataset.py).
         """
         self.excel_file = Path(excel_file) if excel_file else None
         self.dataset_file = Path(dataset_file) if dataset_file else TORSION_DATASET
@@ -98,9 +100,8 @@ class RBPRotamerDistributionPlotter:
 
     @staticmethod
     def read_torsion_dataset(path):
-        """Torsion dataset (.json, or the comma-separated *_clean.tsv with missing angles empty)."""
-        path = Path(path)
-        return pd.read_json(path) if path.suffix.lower() == ".json" else pd.read_csv(path)
+        """Torsion dataset (missing angles NaN); see utils/torsion_dataset.py."""
+        return load_torsion_dataset(path)
 
     def calculate_rotamer_tables_from_json(self, json_file=None, output_excel=None):
         """
