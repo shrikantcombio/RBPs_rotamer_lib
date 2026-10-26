@@ -25,6 +25,8 @@ DEFAULTS = {
     "prince_bin": "prince",
     # protein-protein project (PPI libraries in derive_all_updated_rotamer_libraries.py)
     "protein_protein_dir": "../protein-protein",
+    # Bound/unbound torsion dataset of the 187 complexes (calculate_187_prdbv3_protein_torsions.py)
+    "torsion_dataset": "output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.json",
 }
 
 
