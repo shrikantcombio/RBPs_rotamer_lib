@@ -13,6 +13,7 @@ Usage:
 import argparse
 import logging
 import os
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -25,9 +26,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 RESULTS_DIR = ROOT_DIR / "output_files"
-DEFAULT_LIB_DIR = ROOT_DIR / "RBPs_BBD_rotamer_lib"
+# Standalone runs write here; the published libraries (RBPs_BBD_rotamer_lib*/) are built by
+# derive_all_updated_rotamer_libraries.py and are never a default target
+DEFAULT_LIB_DIR = RESULTS_DIR / "bbd_rotamer_libs" / "consolidated"
 
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_LIB_DIR.mkdir(parents=True, exist_ok=True)
@@ -484,7 +488,7 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=DATASET_DIR / "PROTEIN_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv",
+        default=TORSION_DATASET,
         help="Path to dataset containing backbone & sidechain torsion angles.",
     )
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR / "bbd_rotamer_libs", help="Output directory for .lib files.")
@@ -521,13 +525,7 @@ def main():
         logging.error(f"Input file not found: {args.input_file}")
         return
 
-    # Load dataset
-    try:
-        df = pd.read_csv(args.input_file, sep=",")
-        if "LABEL" not in df.columns:
-            df = pd.read_csv(args.input_file, sep="\t")
-    except Exception:
-        df = pd.read_csv(args.input_file, sep="\t")
+    df = load_torsion_dataset(args.input_file)
 
     logging.info(f"Loaded dataset with {len(df)} residue entries.")
 
