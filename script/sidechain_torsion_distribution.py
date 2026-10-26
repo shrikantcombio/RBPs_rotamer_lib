@@ -28,6 +28,7 @@ Outputs (output_files/sidechain_distributions/):
 Figures (figure(s)/sidechain_distributions/):
   <group>_CHI_distribution.png     chi histograms, bound (filled) vs unbound (outline), with the
                                    Top8000 rotamer centres (frequency >= 1%) marked
+  per_residue/<AA>_CHI_distribution.png   the same, one figure per residue type
   chi1_chi2/<AA>_{B,U}_chi1_chi2.png  chi1 vs chi2 scatter in the manuscript style over the Top8000
                                    favored / allowed regions (for residues with more chis, the
                                    region where some value of the other chis is favored / allowed)
@@ -203,6 +204,41 @@ def top8000_centres(aa, k, min_freq=1.0):
     return out
 
 
+def chi_panel(ax, sub, aa, k, with_residue=True):
+    """Bound (filled) vs unbound (outline) histogram of chi k of residue type `aa`."""
+    low, high, period = display_range(aa, k)
+    width = 5.0 if period == 180 or aa == "PRO" else 10.0
+    bins = np.arange(low, high + width / 2, width)
+    for s, color, kw in (("B", BOUND_COLOR, dict(histtype="stepfilled", alpha=0.35)),
+                         ("U", UNBOUND_COLOR, dict(histtype="step", linewidth=1.4))):
+        vals = display_angles(aa, k, sub[f"{s}_CHI{k}"].dropna())
+        weights = np.full(len(vals), 100.0 / max(len(vals), 1))
+        ax.hist(vals, bins=bins, weights=weights, color=color, **kw)
+    for c in top8000_centres(aa, k):
+        ax.axvline(c, color=MUTED_COLOR, linewidth=0.6, linestyle=":", zorder=0)
+    n = sub[[f"B_CHI{k}", f"U_CHI{k}"]].notna().all(axis=1).sum()
+    note = " (planarity, mod 180°)" if aa == "ARG" and k == 5 else (" (mod 180°)" if period == 180 else "")
+    ax.set_title((f"{aa} " if with_residue else "") + rf"$\chi_{k}${note}", fontsize=10, pad=14)
+    ax.text(0.5, 1.01, f"n = {n:,}", transform=ax.transAxes, ha="center", va="bottom", fontsize=7,
+            color=MUTED_COLOR)
+    step = 30 if (high - low) <= 180 else 60
+    ax.set_xlim(low, high)
+    ax.set_xticks(np.arange(low, high + 1, step))
+    ax.tick_params(labelsize=8)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+
+def legend_handles():
+    return [Patch(facecolor=BOUND_COLOR, alpha=0.35, label="Bound"),
+            Patch(facecolor="none", edgecolor=UNBOUND_COLOR, linewidth=1.4, label="Unbound"),
+            plt.Line2D([], [], color=MUTED_COLOR, linestyle=":", label="Top8000 rotamer centres (≥ 1%)")]
+
+
+def region_suffix(region):
+    return "" if region == "all" else f"_{region}"
+
+
 def plot_group(df, name, residues, region):
     n_cols = max(CHI_COUNTS[aa] for aa in residues)
     fig, axes = plt.subplots(len(residues), n_cols, figsize=(3.3 * n_cols + 0.4, 2.7 * len(residues)),
@@ -210,44 +246,44 @@ def plot_group(df, name, residues, region):
     for row, aa in enumerate(residues):
         sub = df[df["AA"] == aa]
         for col in range(n_cols):
-            ax = axes[row, col]
-            k = col + 1
-            if k > CHI_COUNTS[aa]:
-                ax.axis("off")
+            if col + 1 > CHI_COUNTS[aa]:
+                axes[row, col].axis("off")
                 continue
-            low, high, period = display_range(aa, k)
-            width = 5.0 if period == 180 or aa == "PRO" else 10.0
-            bins = np.arange(low, high + width / 2, width)
-            for s, color, kw in (("B", BOUND_COLOR, dict(histtype="stepfilled", alpha=0.35)),
-                                 ("U", UNBOUND_COLOR, dict(histtype="step", linewidth=1.4))):
-                vals = display_angles(aa, k, sub[f"{s}_CHI{k}"].dropna())
-                weights = np.full(len(vals), 100.0 / max(len(vals), 1))
-                ax.hist(vals, bins=bins, weights=weights, color=color, **kw)
-            for c in top8000_centres(aa, k):
-                ax.axvline(c, color=MUTED_COLOR, linewidth=0.6, linestyle=":", zorder=0)
-            n = sub[[f"B_CHI{k}", f"U_CHI{k}"]].notna().all(axis=1).sum()
-            note = " (mod 180°)" if period == 180 and not (aa == "ARG" and k == 5) else \
-                (" (planarity, mod 180°)" if aa == "ARG" and k == 5 else "")
-            ax.set_title(rf"{aa} $\chi_{k}${note}", fontsize=10)
-            ax.text(0.98, 0.95, f"n = {n:,}", transform=ax.transAxes, ha="right", va="top", fontsize=7,
-                    color=MUTED_COLOR)
-            step = 30 if (high - low) <= 180 else 60
-            ax.set_xlim(low, high)
-            ax.set_xticks(np.arange(low, high + 1, step))
-            ax.tick_params(labelsize=8)
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
+            chi_panel(axes[row, col], sub, aa, col + 1)
             if col == 0:
-                ax.set_ylabel("Residues (%)", fontsize=9)
-    handles = [Patch(facecolor=BOUND_COLOR, alpha=0.35, label="Bound"),
-               Patch(facecolor="none", edgecolor=UNBOUND_COLOR, linewidth=1.4, label="Unbound"),
-               plt.Line2D([], [], color=MUTED_COLOR, linestyle=":", label="Top8000 rotamer centres (≥ 1%)")]
+                axes[row, col].set_ylabel("Residues (%)", fontsize=9)
     fig.tight_layout(rect=(0, 0, 1, 0.94 if len(residues) > 1 else 0.86))
-    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=9,
+    fig.legend(handles=legend_handles(), loc="lower center", ncol=3, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, 0.94 if len(residues) > 1 else 0.86))
     if region != "all":
         fig.suptitle(REGION_NAMES[region].capitalize(), fontsize=11, y=1.0)
-    save(fig, f"{name}_CHI_distribution{'' if region == 'all' else '_' + region}.png")
+    save(fig, f"{name}_CHI_distribution{region_suffix(region)}.png")
+
+
+def plot_residue(df, aa, region, max_cols=3):
+    """One figure per residue type: its chis in rows of at most `max_cols` panels."""
+    n_chi = CHI_COUNTS[aa]
+    n_cols = min(n_chi, max_cols)
+    n_rows = -(-n_chi // n_cols)
+    legend_cols = 3 if n_cols > 1 else 1
+    title_h, legend_h = 0.35, 0.2 + 0.18 * (3 // legend_cols)       # inches
+    width = 3.6 * n_cols if n_cols > 1 else 4.0
+    height = 3.0 * n_rows + title_h + legend_h
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(width, height), squeeze=False)
+    sub = df[df["AA"] == aa]
+    for i, ax in enumerate(axes.flat):
+        if i >= n_chi:
+            ax.axis("off")
+            continue
+        chi_panel(ax, sub, aa, i + 1, with_residue=False)
+        if i % n_cols == 0:
+            ax.set_ylabel("Residues (%)", fontsize=9)
+    fig.tight_layout(rect=(0, legend_h / height, 1, 1 - title_h / height))
+    fig.legend(handles=legend_handles(), loc="lower center", ncol=legend_cols, frameon=False, fontsize=8,
+               bbox_to_anchor=(0.5, 0.0))
+    title = aa + ("" if region == "all" else f", {REGION_NAMES[region]}")
+    fig.suptitle(title, fontsize=13, y=1 - 0.08 / height)
+    save(fig, f"per_residue/{aa}_CHI_distribution{region_suffix(region)}.png")
 
 
 def chi1_chi2_regions(aa, grids):
@@ -328,6 +364,8 @@ def main():
         args.output_dir / f"chi_bin_summary{'' if args.region == 'all' else '_' + args.region}.csv", index=False)
     for name, residues in GROUPS:
         plot_group(plot_df, name, residues, args.region)
+    for aa in CHI_COUNTS:
+        plot_residue(plot_df, aa, args.region)
     for aa in [a for a, n in CHI_COUNTS.items() if n >= 2 and a != "PRO"]:
         for s in "BU":
             plot_chi1_chi2(plot_df, val, grids, aa, s, args.region)
