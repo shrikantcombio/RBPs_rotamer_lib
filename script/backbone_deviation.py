@@ -7,14 +7,16 @@ that coupling specific to the RNA-binding interface?
 
 Paired static structures cannot show that the backbone causes the side-chain change (both can
 follow binding, crystal packing, resolution or local flexibility). The analysis therefore asks:
-  1. Dose-response: chi1 / chi2 rotamer-switch rate, and within-well |delta chi| of residues that
-     do not switch, by backbone change, for interface (I), non-interface surface (N) and core (C)
+  1. Dose-response: chi1-chi4 rotamer-switch rate, and within-well |delta chi| of residues that
+     do not switch (chi1-chi5), by backbone change, for interface (I), non-interface surface (N) and core (C)
      residues. Surface and core residues are the internal baseline for how much side chains move
      when the backbone moves without binding.
   2. Adjusted model: logistic regression of a switch on log2(1 + delta_bb) x region, residue type,
      bound secondary structure, resolution of both structures and side-chain B-factor, with
      standard errors clustered by complex. The interaction gives whether backbone coupling is
      stronger at the interface; the region term gives the interface excess at fixed backbone change.
+     For chi2-chi4 a further model adds whether an upstream chi switched, separating a direct
+     backbone effect on distal chis from one carried through chi1 / chi2.
   3. 2x2 tables: backbone changed (delta_bb >= 10 / 20 / 40 degrees) x side chain switched.
   4. Backbone-dependent prediction: for residues whose rotamer switches and whose (phi, psi) moves
      to another 30-degree library bin, S = log P(rot_B | bb_B) - log P(rot_B | bb_U)
@@ -31,15 +33,21 @@ Definitions:
   delta_bb       : distance on the (phi, psi) torus, sqrt(dphi^2 + dpsi^2), shortest-arc degrees.
   rotamer switch : the chi's library bin differs between bound and unbound (sp3: p / t / m;
                    terminal sp2: residue-specific bins, rotamer_definitions.py). Chis with a single
-                   bin (ASP/PHE/TYR chi2) cannot switch and are left out.
+                   bin (ASP/PHE/TYR chi2, GLU/GLN chi3) cannot switch and are left out.
+  ARG chi5       : the guanidinium is planar and NH1/NH2 are equivalent, so chi5 near 0 and near
+                   180 are the same conformation; only its deviation modulo 180 is analysed
+                   (no switch).
   side-chain B   : mean B-factor of side-chain heavy atoms, as a z-score within each structure;
                    NMR structures have no B-factors.
   Excluded       : PRO (pucker, not a staggered rotamer), residues without phi/psi in either
                    state, and residues whose peptide bond flips cis/trans (|delta omega| > 90).
 
-Main model: complexes whose bound and unbound structures both report a resolution (the NMR
-unbound structures are left out). Sensitivity: (a) all complexes, without resolution and B-factor
-terms; (b) main set without residues whose side-chain B z-score exceeds 2 in either structure.
+Structures: every bound complex is an X-ray structure; the unbound protein is an X-ray structure
+except for 14 complexes without a free crystal structure, where an NMR structure was used.
+Main model: complexes with an X-ray unbound structure (NMR structures have neither resolution
+nor B-factors). Sensitivity: (a) all complexes including NMR unbound, without resolution and
+B-factor terms; (b) main set without residues whose side-chain B z-score exceeds 2 in either
+structure; (c) chi2-chi4: main model plus upstream chi switch.
 
 Outputs:
   output_files/backbone_deviation/   residue table, dose-response, model and 2x2 tables, S scores
@@ -92,10 +100,11 @@ TEXT_COLOR, MUTED_COLOR, GRID_COLOR = "#1f1f1e", "#6b6a64", "#e4e3de"
 DBB_EDGES = [0, 5, 10, 20, 40, 80, np.inf]
 DBB_LABELS = ["0–5", "5–10", "10–20", "20–40", "40–80", ">80"]
 CHANGE_THRESHOLDS = [10, 20, 40]
-CHIS = [1, 2]
+CHIS = [1, 2, 3, 4]    # chis with rotamer switches; ARG chi5 only has a within-plane deviation
 BB_BIN = 30            # library phi/psi bin width (backbone_dependent_rotamer_lib.py)
 SMOOTHING = 10.0       # pseudo-counts towards the backbone-independent distribution
 BZ_OUTLIER = 2.0
+MIN_CELL_PLOT = 20     # dose-response cells with fewer residues are not drawn (kept in the table)
 BACKBONE_ATOMS = {"N", "CA", "C", "O", "OXT"}
 
 plt.rcParams.update({
@@ -236,6 +245,9 @@ def build_residue_table(rebuild_covariates=False):
             dchi[idx[ok]] = angle_diff(b[ok], u[ok], sp2[0] if sp2 else 360.0)
         df[f"SWITCH_CHI{k}"] = switch
         df[f"DCHI{k}"] = dchi
+        if k > 1:
+            df[f"UPSTREAM_SWITCH_CHI{k}"] = (df[[f"SWITCH_CHI{j}" for j in range(1, k)]] == 1).any(axis=1).astype(int)
+    df["DCHI5"] = np.where(df["AA"] == "ARG", angle_diff(df["B_CHI5"], df["U_CHI5"], 180.0), np.nan)
 
     bfac = (pd.read_csv(COVARIATE_CACHE, sep="\t")
             if COVARIATE_CACHE.exists() and not rebuild_covariates else build_bfactor_table())
@@ -281,6 +293,11 @@ def dose_response(df, n_boot, rng):
         for t in (sw, wd):
             t.insert(0, "CHI", f"chi{k}")
         tables += [sw, wd]
+    sub = df.dropna(subset=["DCHI5"]).assign(ONE=1.0)
+    wd = cluster_bootstrap_ratio(sub, "DCHI5", "ONE", ["REGION", "DBB_BIN"], n_boot, rng)
+    wd.insert(0, "MEASURE", "within_well_mean_abs_dchi")
+    wd.insert(0, "CHI", "chi5")
+    tables.append(wd)
     return pd.concat(tables, ignore_index=True)
 
 
@@ -303,7 +320,7 @@ COVARIATE_CONTRASTS = {
 }
 
 
-def fit_model(data, k, adjusted):
+def fit_model(data, k, adjusted, upstream=False):
     """
     Odds ratios of the CONTRASTS terms. X = log2(1 + delta_bb) centred on its median, so the region
     terms compare regions at the median backbone change and exp(X coefficient) is the odds ratio
@@ -311,11 +328,14 @@ def fit_model(data, k, adjusted):
     """
     data = data.assign(X=data["LOG2_DBB"] - data["LOG2_DBB"].median())
     formula = (f"SWITCH_CHI{k} ~ X * {REG} + C(AA) + C(SS)"
-               + (" + RES_B + RES_U + BZ_MEAN" if adjusted else ""))
+               + (" + RES_B + RES_U + BZ_MEAN" if adjusted else "")
+               + (f" + UPSTREAM_SWITCH_CHI{k}" if upstream else ""))
     fit = smf.glm(formula, data, family=sm.families.Binomial()).fit(
         cov_type="cluster", cov_kwds={"groups": pd.factorize(data["PDB"])[0]})
 
     contrasts = dict(CONTRASTS, **(COVARIATE_CONTRASTS if adjusted else {}))
+    if upstream:
+        contrasts["upstream_chi_switched"] = {f"UPSTREAM_SWITCH_CHI{k}": 1}
     cov = fit.cov_params()
     rows = []
     for name, terms in contrasts.items():
@@ -338,9 +358,12 @@ def adjusted_models(df):
         base = df.dropna(subset=[f"SWITCH_CHI{k}", "LOG2_DBB", "REGION", "AA", "SS"])
         main = base[base["HAS_RESOLUTION"]].dropna(subset=["BZ_MEAN"])
         clean = main[(main["BZ_B"].abs() <= BZ_OUTLIER) & (main["BZ_U"].abs() <= BZ_OUTLIER)]
-        for label, data, adjusted in [("main", main, True), ("all_complexes_unadjusted", base, False),
-                                      ("main_without_high_B", clean, True)]:
-            t = fit_model(data, k, adjusted)
+        fits = [("main", main, True, False), ("all_complexes_unadjusted", base, False, False),
+                ("main_without_high_B", clean, True, False)]
+        if k > 1:
+            fits.append(("main_plus_upstream_switch", main, True, True))
+        for label, data, adjusted, upstream in fits:
+            t = fit_model(data, k, adjusted, upstream)
             t.insert(0, "MODEL", label)
             t.insert(0, "CHI", f"chi{k}")
             tables.append(t)
@@ -472,32 +495,45 @@ def save(fig, name):
 
 
 def plot_dose_response(table):
-    fig, axes = plt.subplots(2, 2, figsize=(9.5, 7.2), sharex=True)
+    """Rows chi1-chi5; columns switch rate and within-rotamer |delta chi| of residues that do not switch."""
+    chis = CHIS + [5]
+    fig, axes = plt.subplots(len(chis), 2, figsize=(9.5, 2.75 * len(chis)), sharex=True)
     x = np.arange(len(DBB_LABELS))
     offsets = {"I": -0.12, "N": 0.0, "C": 0.12}
-    rows = [("switch_rate", "Rotamer switch rate (%)", 100.0),
-            ("within_well_mean_abs_dchi", "Within-rotamer |Δχ| (°)\n(residues that do not switch)", 1.0)]
-    for col, k in enumerate(CHIS):
-        for row, (measure, ylabel, scale) in enumerate(rows):
+    cols = [("switch_rate", "Rotamer switch rate (%)", 100.0),
+            ("within_well_mean_abs_dchi", "Within-rotamer |Δχ| (°), residues that do not switch", 1.0)]
+    for row, k in enumerate(chis):
+        for col, (measure, title, scale) in enumerate(cols):
             ax = axes[row, col]
             sub = table[(table["CHI"] == f"chi{k}") & (table["MEASURE"] == measure)]
+            if sub.empty:
+                ax.axis("off")
+                ax.text(0.5, 0.5, "ARG χ5: planar guanidinium,\nno rotamers (deviation mod 180°)",
+                        ha="center", va="center", fontsize=9, color=MUTED_COLOR, transform=ax.transAxes)
+                continue
             for region in REGIONS:
                 r = sub[sub["REGION"] == region].set_index("DBB_BIN").reindex(DBB_LABELS)
+                r = r.where(r["N"] >= MIN_CELL_PLOT)
                 ax.errorbar(x + offsets[region], r["VALUE"] * scale,
                             yerr=[(r["VALUE"] - r["CI_LOW"]) * scale, (r["CI_HIGH"] - r["VALUE"]) * scale],
-                            color=REGION_COLORS[region], marker=REGION_MARKERS[region], markersize=6,
-                            linewidth=2, capsize=0, elinewidth=1.2, markeredgecolor="white", markeredgewidth=1)
+                            color=REGION_COLORS[region], marker=REGION_MARKERS[region], markersize=5,
+                            linewidth=1.8, capsize=0, elinewidth=1.1, markeredgecolor="white", markeredgewidth=0.8)
             style_axis(ax)
             ax.set_ylim(bottom=0)
-            if col == 0:
-                ax.set_ylabel(ylabel, fontsize=10)
+            ax.set_xticks(x, DBB_LABELS)
             if row == 0:
-                ax.set_title(rf"$\chi_{k}$", fontsize=12, pad=8)
-            else:
-                ax.set_xticks(x, DBB_LABELS)
+                ax.set_title(title, fontsize=10, pad=8)
+            if col == 0 or (k == 5 and col == 1):
+                ax.set_ylabel(rf"$\chi_{k}$", fontsize=12, rotation=0, labelpad=16, va="center")
+            if row == len(chis) - 1:
                 ax.set_xlabel("Backbone change Δφψ (°)", fontsize=10)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
-    region_legend(fig, y=0.965)
+    axes[-2, 0].tick_params(labelbottom=True)
+    axes[-2, 0].set_xlabel("Backbone change Δφψ (°)", fontsize=10)
+    fig.text(0.5, 0.0, f"Cells with fewer than {MIN_CELL_PLOT} residues are not shown. "
+             "Error bars: 95% interval from resampling complexes.", ha="center", va="top", fontsize=8,
+             color=MUTED_COLOR)
+    fig.tight_layout(rect=(0, 0, 1, 0.975))
+    region_legend(fig, y=0.977)
     save(fig, "dose_response.png")
 
 
@@ -508,31 +544,42 @@ def plot_odds_ratios(models):
              ("dbb_slope_ratio_interface_vs_surface", "Interface / surface Δφψ slope"),
              ("interface_vs_surface_at_median_dbb", "Interface vs surface, same Δφψ"),
              ("core_vs_surface_at_median_dbb", "Core vs surface, same Δφψ")]
-    model_style = {"main": ("Main (X-ray/EM, adjusted)", "o", TEXT_COLOR),
-                   "all_complexes_unadjusted": ("All complexes, unadjusted", "s", "#2a78d6"),
-                   "main_without_high_B": ("Main, without high-B residues", "D", "#eb6834")}
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+    model_style = {"main": ("Main: X-ray unbound, adjusted", "o", TEXT_COLOR),
+                   "all_complexes_unadjusted": ("All complexes (incl. NMR unbound), unadjusted", "s", "#2a78d6"),
+                   "main_without_high_B": ("Main, without high-B residues", "D", "#eb6834"),
+                   "main_plus_upstream_switch": ("Main + upstream χ switch", "v", "#1baf7a")}
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8.4), sharey=True)
     y = np.arange(len(terms))[::-1]
-    for ax, k in zip(axes, CHIS):
+    ticks = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6]
+    lo = max(0.2, models["CI_LOW"].min() * 0.9)
+    hi = min(8.0, models["CI_HIGH"].max() * 1.1)
+    for ax, k in zip(axes.flat, CHIS):
         for m_idx, (model, (label, marker, color)) in enumerate(model_style.items()):
             sub = models[(models["CHI"] == f"chi{k}") & (models["MODEL"] == model)].set_index("TERM")
+            if sub.empty:
+                continue
             sub = sub.reindex([t for t, _ in terms])
-            ax.errorbar(sub["OR"], y + (1 - m_idx) * 0.22, xerr=[sub["OR"] - sub["CI_LOW"], sub["CI_HIGH"] - sub["OR"]],
-                        fmt=marker, color=color, markersize=6, elinewidth=1.2, capsize=0,
+            ax.errorbar(sub["OR"], y + (1.5 - m_idx) * 0.17,
+                        xerr=[sub["OR"] - sub["CI_LOW"], sub["CI_HIGH"] - sub["OR"]],
+                        fmt=marker, color=color, markersize=5.5, elinewidth=1.1, capsize=0,
                         markeredgecolor="white", markeredgewidth=0.8, label=label)
+        n = models.loc[(models["CHI"] == f"chi{k}") & (models["MODEL"] == "main"), "N_RESIDUES"].iloc[0]
         ax.axvline(1, color=MUTED_COLOR, linewidth=1, linestyle="--")
         ax.set_xscale("log")
-        ax.set_xticks([0.5, 0.75, 1, 1.5, 2, 3], ["0.5", "0.75", "1", "1.5", "2", "3"])
+        ax.set_xlim(lo, hi)
+        ax.set_xticks([t for t in ticks if lo <= t <= hi], [f"{t:g}" for t in ticks if lo <= t <= hi])
         ax.minorticks_off()
         ax.grid(axis="x", color=GRID_COLOR, linewidth=0.8)
         ax.set_axisbelow(True)
         ax.tick_params(labelsize=9)
-        ax.set_title(rf"$\chi_{k}$ rotamer switch", fontsize=11, pad=8)
-        ax.set_xlabel("Odds ratio (95% CI, clustered by complex)", fontsize=10)
-    axes[0].set_yticks(y, [t for _, t in terms], fontsize=9)
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.55, 0.93), ncol=3, frameon=False, fontsize=9)
+        ax.set_title(rf"$\chi_{k}$ rotamer switch (main: n = {n:,})", fontsize=11, pad=8)
+        if k > 2:
+            ax.set_xlabel("Odds ratio (95% CI, clustered by complex)", fontsize=10)
+    for ax in axes[:, 0]:
+        ax.set_yticks(y, [t for _, t in terms], fontsize=9)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    handles, labels = axes[0, 1].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.55, 0.94), ncol=2, frameon=False, fontsize=9)
     save(fig, "adjusted_odds_ratios.png")
 
 
