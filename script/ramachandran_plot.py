@@ -21,7 +21,7 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.stats import gaussian_kde
+from scipy.stats import circmean, circstd, gaussian_kde
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -29,7 +29,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Directory configurations
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
 RESULTS_DIR = ROOT_DIR / "output_files" / "ramachandran"
 FIGURES_DIR = ROOT_DIR / "figure" / "ramachandran"
 ALT_FIGURES_DIR = ROOT_DIR / "figures" / "ramachandran"
@@ -44,6 +43,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from utils.mmcif_clean_reader import parse_file
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset
 
 try:
     import seaborn as sns
@@ -298,12 +298,7 @@ class RamachandranPlot:
             if not p.exists():
                 logging.error(f"Precalculated file not found: {p}")
                 return
-            try:
-                df = pd.read_csv(p, sep=",")
-                if "LABEL" not in df.columns and "B_PHI" not in df.columns and "PHI" not in df.columns:
-                    df = pd.read_csv(p, sep="\t")
-            except Exception:
-                df = pd.read_csv(p, sep="\t")
+            df = load_torsion_dataset(p)
 
         # Map standard column names if using B_PHI/B_PSI or U_PHI/U_PSI
         if "B_PHI" in df.columns and "PHI" not in df.columns:
@@ -317,13 +312,27 @@ class RamachandranPlot:
             df["RESNAME"] = df["LABEL"].astype(str).str[:3]
 
         if "RAMA_TYPE" not in df.columns:
-            df["RAMA_TYPE"] = df["RESNAME"].apply(self.classify_rama_type)
+            df["RAMA_TYPE"] = [self.classify_rama_type(r, n) for r, n in zip(df["RESNAME"], self._next_resnames(df))]
 
         if "REGION" not in df.columns:
             df["REGION"] = df.apply(lambda row: self.classify_region(row["PHI"], row["PSI"], row.get("RAMA_TYPE", "General")), axis=1)
 
         self.data_df = df
         logging.info(f"Loaded precalculated data with {len(self.data_df)} records.")
+
+    @staticmethod
+    def _next_resnames(df):
+        """
+        Name of the residue peptide-bonded after each row (rows in chain order, as in the torsion
+        dataset), or None. Psi is defined only when residue i is bonded to i + 1 in the same chain,
+        so a missing psi marks a chain end or break.
+        """
+        if not {"PDB", "LABEL"}.issubset(df.columns):
+            return [None] * len(df)
+        chain = df["LABEL"].astype(str).str.split().str[1]
+        same_chain = (df["PDB"].shift(-1) == df["PDB"]) & (chain.shift(-1) == chain)
+        nxt = df["RESNAME"].shift(-1).where(same_chain & df["PSI"].notna())
+        return [n if isinstance(n, str) else None for n in nxt]
 
     def draw_ramachandran_regions(self, ax):
         """
@@ -581,10 +590,11 @@ class RamachandranPlot:
                 "FAVORED_PCT": round(fav / tot * 100.0, 2) if tot > 0 else 0.0,
                 "ALLOWED_PCT": round(allow / tot * 100.0, 2) if tot > 0 else 0.0,
                 "OUTLIER_PCT": round(out / tot * 100.0, 2) if tot > 0 else 0.0,
-                "MEAN_PHI": round(grp["PHI"].mean(), 2),
-                "STD_PHI": round(grp["PHI"].std(), 2),
-                "MEAN_PSI": round(grp["PSI"].mean(), 2),
-                "STD_PSI": round(grp["PSI"].std(), 2),
+                # Circular statistics: psi of beta residues straddles +-180
+                "MEAN_PHI": round(float(circmean(grp["PHI"], high=180, low=-180)), 2),
+                "STD_PHI": round(float(circstd(grp["PHI"], high=180, low=-180)), 2),
+                "MEAN_PSI": round(float(circmean(grp["PSI"], high=180, low=-180)), 2),
+                "STD_PSI": round(float(circstd(grp["PSI"], high=180, low=-180)), 2),
             }
             summary_rows.append(row)
 
@@ -602,7 +612,7 @@ class RamachandranPlot:
 def main():
     parser = argparse.ArgumentParser(description="Ramachandran Plot Generator and Torsion Angle Calculator.")
     parser.add_argument("--input-path", type=Path, default=None, help="Path to single PDB/CIF file, list file, or directory of structures.")
-    parser.add_argument("--precalculated-tsv", type=Path, default=DATASET_DIR / "PROTEIN_BACKBONE_SIDECHAIN_TORSION_ANGLES_187_clean.tsv", help="Path to precalculated torsion angle CSV/TSV file.")
+    parser.add_argument("--precalculated-tsv", type=Path, default=TORSION_DATASET, help="Precalculated torsion angle dataset (JSON / CSV / TSV); default the 187-complex bound/unbound JSON.")
     parser.add_argument("--plot-type", type=str, default="all", choices=["scatter", "contour", "faceted", "all"], help="Plot type to generate.")
     parser.add_argument("--figures-dir", type=Path, default=FIGURES_DIR, help="Output directory for figure plots.")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR, help="Output directory for CSV summary tables.")
