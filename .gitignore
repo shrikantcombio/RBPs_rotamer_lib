@@ -14,6 +14,12 @@ figure/backbone_deviation/*
 !figures/backbone_deviation/
 figures/backbone_deviation/*
 !figures/backbone_deviation/README.md
+!figure/backbone_scatter/
+figure/backbone_scatter/*
+!figure/backbone_scatter/README.md
+!figures/backbone_scatter/
+figures/backbone_scatter/*
+!figures/backbone_scatter/README.md
 manuscript_results/*
 manuscript_results/
 for_me/*
