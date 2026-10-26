@@ -23,6 +23,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 import matplotlib.cm as cm
@@ -37,8 +38,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
-DATASET_DIR = ROOT_DIR / "input_files"
-TORSION_DATASET = DATASET_DIR / "ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv"
+sys.path.insert(0, str(ROOT_DIR))
+from utils.torsion_dataset import TORSION_DATASET, load_torsion_dataset  # noqa: E402
 FIGURES_DIRS = [ROOT_DIR / "figure" / "backbone_scatter", ROOT_DIR / "figures" / "backbone_scatter"]
 
 REGIONS = {"I": "Interface", "N": "Non-interface surface", "C": "Core"}
@@ -97,7 +98,7 @@ def save(fig, subdir, name):
 
 
 def load_dataset(path=TORSION_DATASET):
-    df = pd.read_csv(path)
+    df = load_torsion_dataset(path)
     df["AA"] = df["LABEL"].str[:3]
     return df[df["AA"].isin(rotdef.RESIDUE_CHI_COUNTS)].reset_index(drop=True)
 

@@ -12,7 +12,7 @@ python script/backbone_scatter_plot.py --plots 3d   # or: ramachandran
 
 ## Data
 
-`input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`: 187 PRDBv3 complexes,
+`output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.json` (from `script/calculate_187_prdbv3_protein_torsions.py`): 187 PRDBv3 complexes,
 bound (X-ray) and unbound (X-ray; NMR for 14 complexes) residues paired.
 
 - Missing angles are empty in this file and are left out of each plot.
