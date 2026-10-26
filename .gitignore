@@ -7,6 +7,13 @@ notebook/*
 output_files/*
 figure/*
 figures/*
+# Analysis READMEs are tracked; the figures themselves are not
+!figure/backbone_deviation/
+figure/backbone_deviation/*
+!figure/backbone_deviation/README.md
+!figures/backbone_deviation/
+figures/backbone_deviation/*
+!figures/backbone_deviation/README.md
 manuscript_results/*
 manuscript_results/
 for_me/*
