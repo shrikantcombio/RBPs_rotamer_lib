@@ -148,9 +148,9 @@ Residues are categorized based on surface accessibility and interface burial usi
 1. Point the scripts at your data: `cp config/paths.example.json config/paths.json` and set
    `prdbv3_rotamer_dir` (equal-residue `<C_PDB>_<U_PDB>_C.pdb` / `_U.pdb` pairs with PRince `.int`/`.sur`
    files), `rota_assign_dir` and `dssp_bin`.
-2. Torsion dataset: `python script/generate_187_protein_torsion_datasets.py`
-   (writes `input_files/ALL_AA_BACKBONE_OMEGA_SIDECHAIN_TORSION_ANGLES_187_clean.tsv`, the per-complex
-   pairing log `output_files/..._187_pairing_log.csv`, and CSV/TSV/JSON copies in `output_files/`).
+2. Torsion dataset: `python script/calculate_187_prdbv3_protein_torsions.py`
+   (writes `output_files/torsion_dataset/PRDBv3_187_bound_unbound_protein_torsions.{csv,json}` and the
+   per-complex pairing log `PRDBv3_187_bound_unbound_pairing_log.csv`; missing angles are empty / null).
 3. Libraries: `python script/derive_all_updated_rotamer_libraries.py` (writes the v2 libraries to
    `RBPs_BBD_rotamer_lib_v2/`, `RBPs_BBI_rotamer_lib_v2/` and `protein-protein/library_v2/`; the v1
    directories are never overwritten).
